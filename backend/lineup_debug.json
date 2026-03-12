@@ -1,0 +1,629 @@
+{
+  "status": "success",
+  "response": {
+    "lineup": {
+      "id": 8634,
+      "name": "Barcelona",
+      "rating": 7.4,
+      "formation": "4-2-3-1",
+      "starters": [
+        {
+          "id": 1167220,
+          "age": 24,
+          "name": "Joan Garcia",
+          "positionId": 11,
+          "usualPlayingPositionId": 0,
+          "shirtNumber": "13",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "horizontalLayout": {
+            "x": 0.1,
+            "y": 0.5,
+            "height": 0.25,
+            "width": 0.192
+          },
+          "verticalLayout": {
+            "x": 0.5,
+            "y": 0.1,
+            "height": 0.192,
+            "width": 1
+          },
+          "marketValue": 25464348,
+          "performance": {
+            "rating": 8.1
+          },
+          "firstName": "Joan",
+          "lastName": "Garcia",
+          "rankings": null
+        },
+        {
+          "id": 940573,
+          "age": 24,
+          "name": "Eric Garcia",
+          "positionId": 32,
+          "usualPlayingPositionId": 1,
+          "shirtNumber": "24",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "horizontalLayout": {
+            "x": 0.292,
+            "y": 0.875,
+            "height": 0.25,
+            "width": 0.192
+          },
+          "verticalLayout": {
+            "x": 0.125,
+            "y": 0.292,
+            "height": 0.192,
+            "width": 0.25
+          },
+          "marketValue": 18617452,
+          "performance": {
+            "rating": 8
+          },
+          "firstName": "Eric",
+          "lastName": "Garcia",
+          "shortName": "Eric Garcia",
+          "rankings": null
+        },
+        {
+          "id": 921253,
+          "age": 26,
+          "name": "Ronald Araujo",
+          "positionId": 34,
+          "usualPlayingPositionId": 1,
+          "shirtNumber": "4",
+          "isCaptain": true,
+          "countryName": "Uruguay",
+          "countryCode": "URU",
+          "horizontalLayout": {
+            "x": 0.292,
+            "y": 0.625,
+            "height": 0.25,
+            "width": 0.192
+          },
+          "verticalLayout": {
+            "x": 0.375,
+            "y": 0.292,
+            "height": 0.192,
+            "width": 0.25
+          },
+          "marketValue": 37175963,
+          "performance": {
+            "rating": 7.1
+          },
+          "firstName": "Ronald",
+          "lastName": "Araujo",
+          "rankings": null
+        },
+        {
+          "id": 1532137,
+          "age": 18,
+          "name": "Pau Cubarsi",
+          "positionId": 36,
+          "usualPlayingPositionId": 1,
+          "shirtNumber": "5",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "horizontalLayout": {
+            "x": 0.292,
+            "y": 0.375,
+            "height": 0.25,
+            "width": 0.192
+          },
+          "verticalLayout": {
+            "x": 0.625,
+            "y": 0.292,
+            "height": 0.192,
+            "width": 0.25
+          },
+          "marketValue": 131228801,
+          "performance": {
+            "rating": 7.2,
+            "substitutionEvents": [
+              {
+                "time": 69,
+                "type": "subOut",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "Pau",
+          "lastName": "Cubarsi",
+          "rankings": null
+        },
+        {
+          "id": 1254166,
+          "age": 21,
+          "name": "Alejandro Balde",
+          "positionId": 38,
+          "usualPlayingPositionId": 1,
+          "shirtNumber": "3",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "horizontalLayout": {
+            "x": 0.292,
+            "y": 0.125,
+            "height": 0.25,
+            "width": 0.385
+          },
+          "verticalLayout": {
+            "x": 0.875,
+            "y": 0.292,
+            "height": 0.192,
+            "width": 0.25
+          },
+          "marketValue": 61155239,
+          "performance": {
+            "rating": 7.3,
+            "substitutionEvents": [
+              {
+                "time": 68,
+                "type": "subOut",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "Alejandro",
+          "lastName": "Balde",
+          "rankings": null
+        },
+        {
+          "id": 638622,
+          "age": 28,
+          "name": "Frenkie de Jong",
+          "positionId": 64,
+          "usualPlayingPositionId": 2,
+          "shirtNumber": "21",
+          "countryName": "Netherlands",
+          "countryCode": "NED",
+          "horizontalLayout": {
+            "x": 0.485,
+            "y": 0.7,
+            "height": 0.25,
+            "width": 0.192
+          },
+          "verticalLayout": {
+            "x": 0.3,
+            "y": 0.485,
+            "height": 0.192,
+            "width": 0.4
+          },
+          "marketValue": 42900484,
+          "performance": {
+            "rating": 7.1
+          },
+          "firstName": "Frenkie",
+          "lastName": "de Jong",
+          "rankings": null
+        },
+        {
+          "id": 1083323,
+          "age": 22,
+          "name": "Pedri",
+          "positionId": 66,
+          "usualPlayingPositionId": 2,
+          "shirtNumber": "8",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "horizontalLayout": {
+            "x": 0.485,
+            "y": 0.3,
+            "height": 0.25,
+            "width": 0.192
+          },
+          "verticalLayout": {
+            "x": 0.7,
+            "y": 0.485,
+            "height": 0.192,
+            "width": 0.4
+          },
+          "marketValue": 107931049,
+          "performance": {
+            "rating": 8.3
+          },
+          "firstName": "",
+          "lastName": "Pedri",
+          "rankings": null
+        },
+        {
+          "id": 1467236,
+          "age": 18,
+          "name": "Lamine Yamal",
+          "positionId": 83,
+          "usualPlayingPositionId": 3,
+          "shirtNumber": "10",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "horizontalLayout": {
+            "x": 0.678,
+            "y": 0.837,
+            "height": 0.25,
+            "width": 0.193
+          },
+          "verticalLayout": {
+            "x": 0.162,
+            "y": 0.678,
+            "height": 0.192,
+            "width": 0.325
+          },
+          "marketValue": 184938315,
+          "performance": {
+            "rating": 9.2,
+            "events": [
+              {
+                "type": "goal"
+              },
+              {
+                "type": "assist"
+              }
+            ],
+            "playerOfTheMatch": true
+          },
+          "firstName": "Lamine",
+          "lastName": "Yamal",
+          "shortName": "Lamine Yamal",
+          "rankings": null
+        },
+        {
+          "id": 1404415,
+          "age": 22,
+          "name": "Fermin Lopez",
+          "positionId": 85,
+          "usualPlayingPositionId": 2,
+          "shirtNumber": "16",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "horizontalLayout": {
+            "x": 0.678,
+            "y": 0.5,
+            "height": 0.25,
+            "width": 0.192
+          },
+          "verticalLayout": {
+            "x": 0.5,
+            "y": 0.678,
+            "height": 0.192,
+            "width": 0.337
+          },
+          "marketValue": 57724502,
+          "performance": {
+            "rating": 6.8,
+            "substitutionEvents": [
+              {
+                "time": 46,
+                "type": "subOut",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "Fermin",
+          "lastName": "Lopez",
+          "rankings": null
+        },
+        {
+          "id": 696679,
+          "age": 28,
+          "name": "Raphinha",
+          "positionId": 87,
+          "usualPlayingPositionId": 3,
+          "shirtNumber": "11",
+          "countryName": "Brazil",
+          "countryCode": "BRA",
+          "horizontalLayout": {
+            "x": 0.678,
+            "y": 0.163,
+            "height": 0.25,
+            "width": 0.385
+          },
+          "verticalLayout": {
+            "x": 0.837,
+            "y": 0.678,
+            "height": 0.192,
+            "width": 0.325
+          },
+          "marketValue": 102877685,
+          "performance": {
+            "rating": 8.4,
+            "events": [
+              {
+                "type": "yellowCard"
+              },
+              {
+                "type": "goal"
+              }
+            ],
+            "substitutionEvents": [
+              {
+                "time": 77,
+                "type": "subOut",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "",
+          "lastName": "Raphinha",
+          "rankings": null
+        },
+        {
+          "id": 881771,
+          "age": 25,
+          "name": "Ferran Torres",
+          "positionId": 115,
+          "usualPlayingPositionId": 3,
+          "shirtNumber": "7",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "horizontalLayout": {
+            "x": 0.87,
+            "y": 0.5,
+            "height": 0.25,
+            "width": 0.192
+          },
+          "verticalLayout": {
+            "x": 0.5,
+            "y": 0.87,
+            "height": 0.192,
+            "width": 1
+          },
+          "marketValue": 45336577,
+          "performance": {
+            "rating": 7.8,
+            "events": [
+              {
+                "type": "goal"
+              }
+            ],
+            "substitutionEvents": [
+              {
+                "time": 69,
+                "type": "subOut",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "Ferran",
+          "lastName": "Torres",
+          "shortName": "Ferran",
+          "rankings": null
+        }
+      ],
+      "coach": {
+        "id": 131509,
+        "age": 60,
+        "name": "Hans-Dieter Flick",
+        "countryName": "Germany",
+        "countryCode": "GER",
+        "firstName": "Hans-Dieter",
+        "lastName": "Flick",
+        "primaryTeamId": 8634,
+        "primaryTeamName": "Barcelona",
+        "usualPlayingPositionId": null,
+        "isCoach": true
+      },
+      "subs": [
+        {
+          "id": 614834,
+          "age": 27,
+          "name": "Dani Olmo",
+          "usualPlayingPositionId": 2,
+          "shirtNumber": "20",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "marketValue": 56517468,
+          "performance": {
+            "rating": 7,
+            "substitutionEvents": [
+              {
+                "time": 46,
+                "type": "subIn",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "Dani",
+          "lastName": "Olmo",
+          "rankings": null
+        },
+        {
+          "id": 1789791,
+          "age": 18,
+          "name": "Jofre Torrents",
+          "usualPlayingPositionId": 1,
+          "shirtNumber": "26",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "marketValue": 1707877,
+          "performance": {
+            "rating": 6.2,
+            "substitutionEvents": [
+              {
+                "time": 68,
+                "type": "subIn",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "Jofre",
+          "lastName": "Torrents",
+          "rankings": null
+        },
+        {
+          "id": 1279040,
+          "age": 21,
+          "name": "Gavi",
+          "usualPlayingPositionId": 2,
+          "shirtNumber": "6",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "marketValue": 49614539,
+          "performance": {
+            "rating": 7.3,
+            "events": [
+              {
+                "type": "assist"
+              }
+            ],
+            "substitutionEvents": [
+              {
+                "time": 69,
+                "type": "subIn",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "",
+          "lastName": "Gavi",
+          "shortName": "Gavi",
+          "rankings": null
+        },
+        {
+          "id": 696365,
+          "age": 27,
+          "name": "Marcus Rashford",
+          "usualPlayingPositionId": 3,
+          "shirtNumber": "14",
+          "countryName": "England",
+          "countryCode": "ENG",
+          "marketValue": 39793945,
+          "performance": {
+            "rating": 6.5,
+            "substitutionEvents": [
+              {
+                "time": 69,
+                "type": "subIn",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "Marcus",
+          "lastName": "Rashford",
+          "rankings": null
+        },
+        {
+          "id": 705450,
+          "age": 26,
+          "name": "Jules Kound\u00e9",
+          "usualPlayingPositionId": 1,
+          "shirtNumber": "23",
+          "countryName": "France",
+          "countryCode": "FRA",
+          "marketValue": 55362918,
+          "performance": {
+            "rating": 6.2,
+            "substitutionEvents": [
+              {
+                "time": 77,
+                "type": "subIn",
+                "reason": "tactical"
+              }
+            ]
+          },
+          "firstName": "Jules",
+          "lastName": "Kound\u00e9",
+          "rankings": null
+        },
+        {
+          "id": 1665436,
+          "age": 17,
+          "name": "Guillermo Fernandez",
+          "shirtNumber": "30",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "marketValue": 3911344,
+          "performance": {},
+          "firstName": "Guillermo",
+          "lastName": "Fernandez",
+          "rankings": null
+        },
+        {
+          "id": 1529648,
+          "age": 19,
+          "name": "Diego Kochen",
+          "usualPlayingPositionId": 0,
+          "shirtNumber": "31",
+          "countryName": "USA",
+          "countryCode": "USA",
+          "marketValue": 1014792,
+          "performance": {},
+          "firstName": "Diego",
+          "lastName": "Kochen",
+          "rankings": null
+        },
+        {
+          "id": 990996,
+          "age": 26,
+          "name": "Inaki Pena",
+          "usualPlayingPositionId": 0,
+          "shirtNumber": "1",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "marketValue": 4823705,
+          "performance": {},
+          "firstName": "Inaki",
+          "lastName": "Pena",
+          "rankings": null
+        },
+        {
+          "id": 449232,
+          "age": 29,
+          "name": "Andreas Christensen",
+          "usualPlayingPositionId": 1,
+          "shirtNumber": "15",
+          "countryName": "Denmark",
+          "countryCode": "DEN",
+          "marketValue": 22901852,
+          "performance": {},
+          "firstName": "Andreas",
+          "lastName": "Christensen",
+          "rankings": null
+        },
+        {
+          "id": 1682313,
+          "age": 17,
+          "name": "Dro Fernandez",
+          "usualPlayingPositionId": 2,
+          "shirtNumber": "27",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "marketValue": 6131013,
+          "performance": {},
+          "firstName": "Dro",
+          "lastName": "Fernandez",
+          "shortName": "Dro",
+          "rankings": null
+        },
+        {
+          "id": 1384883,
+          "age": 21,
+          "name": "Marc Casado",
+          "usualPlayingPositionId": 2,
+          "shirtNumber": "17",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "marketValue": 34749998,
+          "performance": {},
+          "firstName": "Marc",
+          "lastName": "Casado",
+          "rankings": null
+        },
+        {
+          "id": 1665438,
+          "age": 17,
+          "name": "Toni Fernandez",
+          "usualPlayingPositionId": 3,
+          "shirtNumber": "29",
+          "countryName": "Spain",
+          "countryCode": "ESP",
+          "performance": {},
+          "firstName": "Toni",
+          "lastName": "Fernandez",
+          "rankings": null
+        }
+      ],
+      "unavailable": [],
+      "averageStarterAge": 23.7,
+      "totalStarterMarketValue": 815350415
+    }
+  }
+}
