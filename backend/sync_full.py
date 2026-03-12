@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Full sync: Polish players with minutes from lineups."""
+"""Sync: Polish players with minutes from lineups. Supports incremental and full sync."""
 
+import argparse
 import asyncio
 import sys
 import os
@@ -16,11 +17,12 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 from dotenv import load_dotenv
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 import httpx
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
-from app.db.models import Player, PlayerStats
+from app.db.models import Player, PlayerStats, PlayerStatsByCompetition, SyncState, SyncedMatch
 from app.services.rapidapi import calculate_per_90
 
 load_dotenv()
@@ -50,6 +52,493 @@ TEAMS = {
 
 CURRENT_SEASON = "2025/26"
 CACHE_TTL_HOURS = 24
+SYNC_INTERVAL_HOURS = 12  # Minimum time between syncs
+
+
+# Competition type mapping
+def map_competition_type(competition_name: str) -> str:
+    """Map competition name to type (league, european, domestic)."""
+    name_lower = competition_name.lower()
+
+    # European competitions
+    if any(x in name_lower for x in ["champions league", "europa league", "conference league"]):
+        return "european"
+
+    # Domestic cups
+    if any(x in name_lower for x in ["copa del rey", "supercopa", "cup", "copa"]):
+        return "domestic"
+
+    # Default: league
+    return "league"
+
+
+# CLI Arguments
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Sync Polish players stats")
+    parser.add_argument("--full", action="store_true", help="Full sync (all matches, ignore cache)")
+    parser.add_argument("--dry-run", action="store_true", help="Preview without saving to database")
+    parser.add_argument("--team", type=int, help="Sync only specific team by ID (e.g., 8634 for Barcelona)")
+    parser.add_argument("--force", action="store_true", help="Force sync, ignore cache timing")
+    return parser.parse_args()
+
+
+# Sync state helpers
+async def get_sync_state(session, team_id: int, competition_id: int) -> SyncState | None:
+    """Get sync state for a team/competition combination."""
+    result = await session.execute(
+        select(SyncState).where(
+            SyncState.team_id == team_id,
+            SyncState.competition_id == competition_id,
+            SyncState.season == CURRENT_SEASON,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_sync_state(session, team_id: int, team_name: str, competition_id: int,
+                            competition_name: str, last_match_id: int, matches_synced: int):
+    """Update or create sync state after processing matches."""
+    sync_state = await get_sync_state(session, team_id, competition_id)
+
+    if sync_state:
+        sync_state.last_sync_at = datetime.utcnow()
+        sync_state.last_match_id = last_match_id
+        sync_state.matches_synced += matches_synced
+        sync_state.next_sync_at = datetime.utcnow() + timedelta(hours=SYNC_INTERVAL_HOURS)
+    else:
+        sync_state = SyncState(
+            team_id=team_id,
+            team_name=team_name,
+            competition_id=competition_id,
+            competition_name=competition_name,
+            season=CURRENT_SEASON,
+            last_sync_at=datetime.utcnow(),
+            last_match_id=last_match_id,
+            matches_synced=matches_synced,
+            next_sync_at=datetime.utcnow() + timedelta(hours=SYNC_INTERVAL_HOURS),
+        )
+        session.add(sync_state)
+
+
+async def is_match_synced(session, match_id: int, team_id: int) -> bool:
+    """Check if a match has already been synced (deduplication)."""
+    result = await session.execute(
+        select(SyncedMatch).where(
+            SyncedMatch.match_id == match_id,
+            SyncedMatch.team_id == team_id,
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def mark_match_synced(session, match_id: int, team_id: int, competition_id: int):
+    """Mark a match as synced to prevent duplicate processing."""
+    synced = SyncedMatch(
+        match_id=match_id,
+        team_id=team_id,
+        competition_id=competition_id,
+    )
+    session.add(synced)
+
+
+async def sync_team_v2(team_id: int, team_info: dict, session, args):
+    """Sync Polish players with incremental support and per-competition stats."""
+    print(f"\n{'='*60}")
+    print(f"SYNC: {team_info['name']} - {'FULL' if args.full else 'INCREMENTAL'}")
+    print(f"{'='*60}")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Collect stats per competition
+        stats_by_competition = defaultdict(lambda: defaultdict(lambda: {
+            "minutes": 0, "goals": 0, "assists": 0,
+            "yellow_cards": 0, "red_cards": 0,
+            "matches_total": 0, "matches_started": 0, "matches_subbed": 0,
+            "ratings": [],
+            # GK stats
+            "clean_sheets": 0, "saves": 0, "goals_against": 0,
+            "shots_on_target_against": 0,
+        }))
+
+        # Track processed matches for dedup
+        matches_processed = 0
+        api_calls = 0
+
+        for competition in team_info.get("competitions", []):
+            comp_name = competition["name"]
+            comp_id = competition["league_id"]
+            comp_type = map_competition_type(comp_name)
+
+            print(f"\n📥 {comp_name} ({comp_type})...")
+
+            # Check sync state for incremental
+            if not args.full and not args.force:
+                sync_state = await get_sync_state(session, team_id, comp_id)
+                if sync_state and sync_state.next_sync_at:
+                    if datetime.utcnow() < sync_state.next_sync_at:
+                        print(f"   ⏭️ Cache valid until {sync_state.next_sync_at}, skipping")
+                        continue
+
+            # Fetch matches from API
+            try:
+                matches = await get_matches_by_league(comp_id, client)
+                api_calls += 1
+
+                # Fallback to search for leagues with no matches
+                if len(matches) == 0:
+                    matches = await get_matches_by_search(
+                        team_info["name"].replace("FC ", ""), comp_id, client
+                    )
+                    api_calls += 1
+
+                print(f"   API returned {len(matches)} total matches")
+
+            except Exception as e:
+                print(f"   ❌ API error: {e}")
+                continue
+
+            # Filter: team matches + finished
+            team_matches = []
+            for m in matches:
+                if not isinstance(m, dict):
+                    continue
+                home = m.get("home", {}) or {}
+                away = m.get("away", {}) or {}
+                try:
+                    home_id = int(home.get("id")) if isinstance(home, dict) and home.get("id") else None
+                    away_id = int(away.get("id")) if isinstance(away, dict) and away.get("id") else None
+                except (ValueError, TypeError):
+                    continue
+
+                status = m.get("status", {})
+                is_finished = status.get("finished", False) if isinstance(status, dict) else False
+
+                if (home_id == team_id or away_id == team_id) and is_finished:
+                    team_matches.append({
+                        "event_id": m.get("id"),
+                        "is_home": home_id == team_id,
+                        "home_name": home.get("name"),
+                        "away_name": away.get("name"),
+                    })
+
+            print(f"   {team_info['name']} finished matches: {len(team_matches)}")
+
+            if not team_matches:
+                continue
+
+            # For incremental: get last synced match_id
+            last_match_id = 0
+            if not args.full:
+                sync_state = await get_sync_state(session, team_id, comp_id)
+                if sync_state:
+                    last_match_id = sync_state.last_match_id or 0
+
+            # Process each match
+            new_matches_synced = 0
+            max_match_id = last_match_id
+
+            for match in team_matches:
+                event_id = int(match["event_id"]) if match["event_id"] else 0
+
+                # Incremental: skip already processed
+                if not args.full and event_id <= last_match_id:
+                    continue
+
+                # Dedup: skip if already synced
+                if not args.full and await is_match_synced(session, event_id, team_id):
+                    continue
+
+                is_home = match["is_home"]
+                print(f"   [{event_id}] {match['home_name']} vs {match['away_name']}...", end=" ")
+
+                if args.dry_run:
+                    print("DRY RUN")
+                    new_matches_synced += 1
+                    max_match_id = max(max_match_id, event_id)
+                    continue
+
+                try:
+                    lineup_data = await get_lineup(event_id, is_home, client)
+                    api_calls += 1
+
+                    lineup = lineup_data.get("response", {}).get("lineup", {})
+                    if not lineup:
+                        print("NO LINEUP")
+                        continue
+
+                    starters = lineup.get("starters", [])
+                    subs = lineup.get("subs", [])
+                    starter_ids = {p.get("id") for p in starters}
+                    all_players = starters + subs
+
+                    found_players = []
+                    gk_playing = None
+
+                    for player in all_players:
+                        player_rapid_id = player.get("id")
+                        if player_rapid_id not in POLISH_PLAYERS:
+                            continue
+
+                        is_starter = player_rapid_id in starter_ids
+                        parsed = parse_player_performance(player, is_starter)
+
+                        if not parsed or parsed["minutes"] == 0:
+                            continue
+
+                        # Get or create player in DB
+                        result = await session.execute(
+                            select(Player).where(Player.rapidapi_id == player_rapid_id)
+                        )
+                        player_db = result.scalar_one_or_none()
+
+                        if not player_db:
+                            player_db = Player(
+                                rapidapi_id=player_rapid_id,
+                                name=POLISH_PLAYERS[player_rapid_id],
+                                position="ST" if player_rapid_id == 93447 else "GK",
+                                team=team_info["name"],
+                                league="Multiple",
+                            )
+                            session.add(player_db)
+                            await session.flush()
+
+                        # Update stats for this competition
+                        stats = stats_by_competition[(comp_type, comp_name, comp_id)][player_db.id]
+                        stats["minutes"] += parsed["minutes"]
+                        stats["goals"] += parsed["goals"]
+                        stats["assists"] += parsed["assists"]
+                        stats["yellow_cards"] += parsed["yellow_cards"]
+                        stats["red_cards"] += parsed["red_cards"]
+                        stats["matches_total"] += 1
+                        if parsed["started"]:
+                            stats["matches_started"] += 1
+                        else:
+                            stats["matches_subbed"] += 1
+
+                        rating = player.get("performance", {}).get("rating")
+                        if rating:
+                            stats["ratings"].append(rating)
+
+                        # Check if GK
+                        is_gk = (
+                            player.get("positionId") == 11 or
+                            player.get("usualPlayingPositionId") == 0 or
+                            player_rapid_id == 169718
+                        )
+                        if is_gk:
+                            gk_playing = (player_db.id, player_rapid_id)
+
+                        found_players.append(f"{POLISH_PLAYERS[player_rapid_id]} ({parsed['minutes']}')")
+
+                    # Fetch GK stats if needed
+                    if gk_playing:
+                        try:
+                            match_score = await get_match_score(event_id, client)
+                            match_stats = await get_match_all_stats(event_id, client)
+                            api_calls += 2
+                            gk_stats = extract_gk_match_stats(match_score, match_stats, is_home)
+
+                            stats = stats_by_competition[(comp_type, comp_name, comp_id)][gk_playing[0]]
+                            stats["clean_sheets"] += 1 if gk_stats["clean_sheet"] else 0
+                            stats["saves"] += gk_stats["saves"]
+                            stats["goals_against"] += gk_stats["goals_against"]
+                            stats["shots_on_target_against"] += gk_stats["shots_on_target_against"]
+                        except Exception as e:
+                            print(f"GK error: {e}")
+
+                    # Mark match as synced
+                    await mark_match_synced(session, event_id, team_id, comp_id)
+
+                    if found_players:
+                        print(f"FOUND: {', '.join(found_players)}")
+                    else:
+                        print("-")
+
+                    new_matches_synced += 1
+                    max_match_id = max(max_match_id, event_id)
+                    matches_processed += 1
+
+                    await asyncio.sleep(0.1)
+
+                except Exception as e:
+                    print(f"ERROR: {e}")
+
+            # Update sync state
+            if not args.dry_run and new_matches_synced > 0:
+                await update_sync_state(
+                    session, team_id, team_info["name"],
+                    comp_id, comp_name, max_match_id, new_matches_synced
+                )
+                print(f"   ✅ Synced {new_matches_synced} new matches")
+
+        # Save stats to database
+        if args.dry_run:
+            print(f"\n📊 DRY RUN - {matches_processed} matches would be synced")
+            print(f"   API calls: {api_calls}")
+            return matches_processed
+
+        print(f"\n📊 Saving to database...")
+        print(f"   API calls used: {api_calls}")
+
+        # Save per-competition stats
+        for (comp_type, comp_name, comp_id), player_stats in stats_by_competition.items():
+            for player_db_id, stats in player_stats.items():
+                if stats["matches_total"] == 0:
+                    continue
+
+                # Upsert to player_stats_by_competition
+                result = await session.execute(
+                    select(PlayerStatsByCompetition).where(
+                        PlayerStatsByCompetition.player_id == player_db_id,
+                        PlayerStatsByCompetition.season == CURRENT_SEASON,
+                        PlayerStatsByCompetition.competition_type == comp_type,
+                        PlayerStatsByCompetition.competition_name == comp_name,
+                    )
+                )
+                comp_stats = result.scalar_one_or_none()
+
+                if not comp_stats:
+                    comp_stats = PlayerStatsByCompetition(
+                        player_id=player_db_id,
+                        season=CURRENT_SEASON,
+                        competition_type=comp_type,
+                        competition_name=comp_name,
+                        competition_id=comp_id,
+                    )
+                    session.add(comp_stats)
+
+                # Update values
+                avg_rating = sum(stats["ratings"]) / len(stats["ratings"]) if stats["ratings"] else 0
+                comp_stats.matches_total = stats["matches_total"]
+                comp_stats.matches_started = stats["matches_started"]
+                comp_stats.matches_subbed = stats["matches_subbed"]
+                comp_stats.minutes_played = stats["minutes"]
+                comp_stats.goals = stats["goals"]
+                comp_stats.assists = stats["assists"]
+                comp_stats.yellow_cards = stats["yellow_cards"]
+                comp_stats.red_cards = stats["red_cards"]
+                comp_stats.rating = round(avg_rating, 2)
+                comp_stats.g_per90 = calculate_per_90(stats["goals"], stats["minutes"])
+                comp_stats.a_per90 = calculate_per_90(stats["assists"], stats["minutes"])
+                comp_stats.updated_at = datetime.utcnow()
+                comp_stats.expires_at = datetime.utcnow() + timedelta(hours=CACHE_TTL_HOURS)
+
+                # GK stats
+                is_gk = stats["shots_on_target_against"] > 0 or stats["saves"] > 0
+                if is_gk:
+                    comp_stats.clean_sheets = stats["clean_sheets"]
+                    comp_stats.saves = stats["saves"]
+                    comp_stats.goals_against = stats["goals_against"]
+                    if stats["shots_on_target_against"] > 0:
+                        comp_stats.save_percentage = round(
+                            stats["saves"] / stats["shots_on_target_against"] * 100, 1
+                        )
+
+        # Aggregate to Season Total (player_stats)
+        await aggregate_to_season_total(session, team_id)
+
+        return matches_processed
+
+
+async def aggregate_to_season_total(session, team_id: int):
+    """Aggregate all competition stats to player_stats (Season Total)."""
+    print(f"\n📊 Aggregating to Season Total...")
+
+    # Get all players with stats for this team
+    result = await session.execute(
+        select(Player).where(Player.team.ilike(f"%{team_id}%") | (Player.team == "Multiple"))
+    )
+    # Actually get all players that have stats_by_competition
+    result = await session.execute(select(Player))
+    players = result.scalars().all()
+
+    for player in players:
+        # Get all competition stats for this player
+        result = await session.execute(
+            select(PlayerStatsByCompetition).where(
+                PlayerStatsByCompetition.player_id == player.id,
+                PlayerStatsByCompetition.season == CURRENT_SEASON,
+            )
+        )
+        comp_stats_list = result.scalars().all()
+
+        if not comp_stats_list:
+            continue
+
+        # Aggregate
+        total = {
+            "matches_total": 0, "matches_started": 0, "matches_subbed": 0,
+            "minutes_played": 0, "goals": 0, "assists": 0,
+            "yellow_cards": 0, "red_cards": 0, "ratings": [],
+            "clean_sheets": 0, "saves": 0, "goals_against": 0,
+            "shots_on_target_against": 0,
+        }
+
+        for cs in comp_stats_list:
+            total["matches_total"] += cs.matches_total
+            total["matches_started"] += cs.matches_started
+            total["matches_subbed"] += cs.matches_subbed
+            total["minutes_played"] += cs.minutes_played
+            total["goals"] += cs.goals
+            total["assists"] += cs.assists
+            total["yellow_cards"] += cs.yellow_cards
+            total["red_cards"] += cs.red_cards
+            if cs.rating:
+                total["ratings"].append(cs.rating)
+            if cs.clean_sheets:
+                total["clean_sheets"] += cs.clean_sheets
+            if cs.saves:
+                total["saves"] += cs.saves
+            if cs.goals_against:
+                total["goals_against"] += cs.goals_against
+
+        # Get or create PlayerStats
+        result = await session.execute(
+            select(PlayerStats).where(
+                PlayerStats.player_id == player.id,
+                PlayerStats.season == CURRENT_SEASON,
+            )
+        )
+        db_stats = result.scalar_one_or_none()
+
+        if not db_stats:
+            db_stats = PlayerStats(player_id=player.id, season=CURRENT_SEASON)
+            session.add(db_stats)
+
+        # Update Season Total
+        avg_rating = sum(total["ratings"]) / len(total["ratings"]) if total["ratings"] else 0
+        db_stats.matches_total = total["matches_total"]
+        db_stats.matches_started = total["matches_started"]
+        db_stats.matches_subbed = total["matches_subbed"]
+        db_stats.minutes_played = total["minutes_played"]
+        db_stats.goals = total["goals"]
+        db_stats.assists = total["assists"]
+        db_stats.yellow_cards = total["yellow_cards"]
+        db_stats.red_cards = total["red_cards"]
+        db_stats.rating = round(avg_rating, 2)
+        db_stats.g_per90 = calculate_per_90(total["goals"], total["minutes_played"])
+        db_stats.a_per90 = calculate_per_90(total["assists"], total["minutes_played"])
+        db_stats.updated_at = datetime.utcnow()
+        db_stats.expires_at = datetime.utcnow() + timedelta(hours=CACHE_TTL_HOURS)
+
+        # GK totals
+        is_gk = total["saves"] > 0 or total["clean_sheets"] > 0
+        if is_gk and total["shots_on_target_against"] > 0:
+            db_stats.clean_sheets = total["clean_sheets"]
+            db_stats.saves = total["saves"]
+            db_stats.goals_against = total["goals_against"]
+            db_stats.save_percentage = round(
+                total["saves"] / total["shots_on_target_against"] * 100, 1
+            )
+            if total["matches_total"] > 0:
+                db_stats.clean_sheets_percentage = round(
+                    total["clean_sheets"] / total["matches_total"] * 100, 1
+                )
+            db_stats.goals_against_per90 = calculate_per_90(
+                total["goals_against"], total["minutes_played"]
+            )
+
+        print(f"   {player.name}: {total['matches_total']} matches, {total['goals']}G, {total['assists']}A")
 
 
 async def get_matches_by_league(league_id: int, client: httpx.AsyncClient) -> list:
@@ -288,282 +777,47 @@ def parse_player_performance(player: dict, is_starter: bool) -> dict:
     return result
 
 
-async def sync_team(team_id: int, team_info: dict, session):
-    """Sync Polish players from a team with full match data from all competitions."""
-    print(f"\n{'='*60}")
-    print(f"SYNC: {team_info['name']} - ALL COMPETITIONS")
-    print(f"{'='*60}")
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # Collect matches from all competitions
-        all_team_matches = []
-
-        for competition in team_info.get("competitions", []):
-            league_name = competition["name"]
-            league_id = competition["league_id"]
-
-            print(f"📥 Fetching matches from {league_name}...")
-            try:
-                # First try standard endpoint
-                matches = await get_matches_by_league(league_id, client)
-                print(f"   Total matches: {len(matches)}")
-
-                # If no matches from standard endpoint, try search (for Supercopa etc.)
-                if len(matches) == 0:
-                    print(f"   Trying search endpoint for {league_name}...")
-                    matches = await get_matches_by_search(team_info["name"].replace("FC ", ""), league_id, client)
-                    print(f"   Found via search: {len(matches)} matches")
-
-                # Filter team matches (finished only)
-                for m in matches:
-                    if not isinstance(m, dict):
-                        continue
-
-                    home = m.get("home", {}) or {}
-                    away = m.get("away", {}) or {}
-
-                    try:
-                        home_id = int(home.get("id")) if isinstance(home, dict) and home.get("id") else None
-                        away_id = int(away.get("id")) if isinstance(away, dict) and away.get("id") else None
-                    except (ValueError, TypeError):
-                        continue
-
-                    # Only include finished matches
-                    status = m.get("status", {})
-                    is_finished = status.get("finished", False) if isinstance(status, dict) else False
-
-                    if (home_id == team_id or away_id == team_id) and is_finished:
-                        all_team_matches.append({
-                            "event_id": m.get("id"),
-                            "is_home": home_id == team_id,
-                            "home_name": home.get("name"),
-                            "away_name": away.get("name"),
-                            "competition": league_name,
-                        })
-
-                print(f"   {team_info['name']} matches in {league_name}: {len([m for m in all_team_matches if m['competition'] == league_name])}")
-
-            except Exception as e:
-                print(f"   ❌ Error fetching {league_name}: {e}")
-
-        print(f"\n📊 Total matches across all competitions: {len(all_team_matches)}")
-
-        # Aggregate player stats from all matches
-        player_stats = defaultdict(lambda: {
-            "minutes": 0,
-            "goals": 0,
-            "assists": 0,
-            "yellow_cards": 0,
-            "red_cards": 0,
-            "matches_total": 0,
-            "matches_started": 0,
-            "matches_subbed": 0,
-            "ratings": [],
-            # Goalkeeper stats
-            "clean_sheets": 0,
-            "saves": 0,
-            "goals_against": 0,
-            "shots_on_target_against": 0,
-        })
-
-        # Process each match
-        for i, match in enumerate(all_team_matches):
-            event_id = match["event_id"]
-            is_home = match["is_home"]
-            competition = match.get("competition", "Unknown")
-
-            print(f"   [{i+1}/{len(all_team_matches)}] [{competition}] {match['home_name']} vs {match['away_name']}...", end=" ")
-
-            try:
-                lineup_data = await get_lineup(event_id, is_home, client)
-
-                # Navigate to lineup
-                lineup = lineup_data.get("response", {}).get("lineup", {})
-                if not lineup:
-                    print("NO LINEUP")
-                    continue
-
-                # Get starters and subs
-                starters = lineup.get("starters", [])
-                subs = lineup.get("subs", [])
-                starter_ids = {p.get("id") for p in starters}
-                all_players = starters + subs
-
-                found_players = []
-                gk_playing_in_match = None  # Track GK for match stats fetch
-
-                for player in all_players:
-                    player_id = player.get("id")
-                    if player_id in POLISH_PLAYERS:
-                        is_starter = player_id in starter_ids
-                        parsed = parse_player_performance(player, is_starter)
-                        if parsed and parsed["minutes"] > 0:
-                            stats = player_stats[player_id]
-                            stats["minutes"] += parsed["minutes"]
-                            stats["goals"] += parsed["goals"]
-                            stats["assists"] += parsed["assists"]
-                            stats["yellow_cards"] += parsed["yellow_cards"]
-                            stats["red_cards"] += parsed["red_cards"]
-                            stats["matches_total"] += 1
-                            if parsed["started"]:
-                                stats["matches_started"] += 1
-                            else:
-                                stats["matches_subbed"] += 1
-
-                            rating = player.get("performance", {}).get("rating")
-                            if rating:
-                                stats["ratings"].append(rating)
-
-                            # Check if player is GK (positionId 11 or usualPlayingPositionId 0)
-                            is_gk = (
-                                player.get("positionId") == 11 or
-                                player.get("usualPlayingPositionId") == 0 or
-                                player_id == 169718  # Szczęsny ID
-                            )
-
-                            if is_gk:
-                                gk_playing_in_match = player_id
-
-                            found_players.append(f"{POLISH_PLAYERS[player_id]} ({parsed['minutes']}')")
-
-                # Fetch GK match stats if goalkeeper played
-                if gk_playing_in_match:
-                    try:
-                        match_score_data = await get_match_score(event_id, client)
-                        match_stats_data = await get_match_all_stats(event_id, client)
-                        gk_match_stats = extract_gk_match_stats(match_score_data, match_stats_data, is_home)
-
-                        stats = player_stats[gk_playing_in_match]
-                        stats["clean_sheets"] += 1 if gk_match_stats["clean_sheet"] else 0
-                        stats["saves"] += gk_match_stats["saves"]
-                        stats["goals_against"] += gk_match_stats["goals_against"]
-                        stats["shots_on_target_against"] += gk_match_stats["shots_on_target_against"]
-                    except Exception as e:
-                        print(f"GK stats error: {e}")
-
-                if found_players:
-                    print(f"FOUND: {', '.join(found_players)}")
-                else:
-                    print("-")
-
-                # Small delay to not hammer API
-                await asyncio.sleep(0.1)
-
-            except Exception as e:
-                print(f"ERROR: {e}")
-
-        # Update database
-        print(f"\n📊 Updating database...")
-
-        for player_id, stats in player_stats.items():
-            if stats["matches_total"] == 0:
-                print(f"   ⚠️ {POLISH_PLAYERS[player_id]}: No matches found")
-                continue
-
-            # Get or create player
-            result = await session.execute(
-                select(Player).where(Player.rapidapi_id == player_id)
-            )
-            player = result.scalar_one_or_none()
-
-            if not player:
-                player = Player(
-                    rapidapi_id=player_id,
-                    name=POLISH_PLAYERS[player_id],
-                    position="ST" if player_id == 93447 else "GK",
-                    team=team_info["name"],
-                    league="Multiple",  # Player stats aggregated from multiple competitions
-                )
-                session.add(player)
-                await session.flush()
-                print(f"   ✅ NEW: {player.name}")
-            else:
-                player.name = POLISH_PLAYERS[player_id]  # Update with correct Polish name
-                player.team = team_info["name"]
-                player.league = "Multiple"
-                print(f"   🔄 UPDATE: {player.name}")
-
-            # Get or create stats
-            result = await session.execute(
-                select(PlayerStats).where(
-                    PlayerStats.player_id == player.id,
-                    PlayerStats.season == CURRENT_SEASON,
-                )
-            )
-            db_stats = result.scalar_one_or_none()
-
-            if not db_stats:
-                db_stats = PlayerStats(
-                    player_id=player.id,
-                    season=CURRENT_SEASON,
-                )
-                session.add(db_stats)
-
-            # Calculate average rating
-            avg_rating = sum(stats["ratings"]) / len(stats["ratings"]) if stats["ratings"] else 0
-
-            # Update stats
-            db_stats.matches_total = stats["matches_total"]
-            db_stats.matches_started = stats["matches_started"]
-            db_stats.matches_subbed = stats["matches_subbed"]
-            db_stats.minutes_played = stats["minutes"]
-            db_stats.goals = stats["goals"]
-            db_stats.assists = stats["assists"]
-            db_stats.yellow_cards = stats["yellow_cards"]
-            db_stats.red_cards = stats["red_cards"]
-            db_stats.rating = round(avg_rating, 2)
-            db_stats.g_per90 = calculate_per_90(stats["goals"], stats["minutes"])
-            db_stats.a_per90 = calculate_per_90(stats["assists"], stats["minutes"])
-            db_stats.updated_at = datetime.utcnow()
-            db_stats.expires_at = datetime.utcnow() + timedelta(hours=CACHE_TTL_HOURS)
-
-            # Goalkeeper stats
-            is_gk = player_id == 169718  # Szczęsny
-            if is_gk and stats["shots_on_target_against"] > 0:
-                db_stats.clean_sheets = stats["clean_sheets"]
-                db_stats.saves = stats["saves"]
-                db_stats.goals_against = stats["goals_against"]
-                # Calculate percentages
-                db_stats.save_percentage = round(stats["saves"] / stats["shots_on_target_against"] * 100, 1)
-                db_stats.goals_against_per90 = calculate_per_90(stats["goals_against"], stats["minutes"])
-                # Clean sheets percentage
-                if stats["matches_total"] > 0:
-                    db_stats.clean_sheets_percentage = round(stats["clean_sheets"] / stats["matches_total"] * 100, 1)
-
-            print(f"      {stats['matches_total']} matches ({stats['matches_started']} started, {stats['matches_subbed']} sub)")
-            print(f"      {stats['minutes']} min, {stats['goals']}G, {stats['assists']}A, {stats['yellow_cards']}YC, {stats['red_cards']}RC")
-            print(f"      G/90: {db_stats.g_per90:.2f}, A/90: {db_stats.a_per90:.2f}, Rating: {db_stats.rating:.2f}")
-            if is_gk and stats["shots_on_target_against"] > 0:
-                print(f"      GK: CS={stats['clean_sheets']} ({db_stats.clean_sheets_percentage}%), saves={stats['saves']}, save%={db_stats.save_percentage}%, GA={stats['goals_against']}, GA/90={db_stats.goals_against_per90:.2f}")
-
-        return len([s for s in player_stats.values() if s["matches_total"] > 0])
-
-
 async def main():
-    """Main sync function."""
+    """Main sync function with CLI support."""
+    args = parse_args()
+
+    mode = "FULL" if args.full else "INCREMENTAL"
     print("=" * 60)
-    print("🔄 FULL SYNC: Polish Players with Lineup Data")
+    print(f"🔄 SYNC: Polish Players ({mode})")
     print("=" * 60)
     print(f"API Host: {API_HOST}")
     print(f"Season: {CURRENT_SEASON}")
     print(f"Players: {list(POLISH_PLAYERS.values())}")
+    if args.dry_run:
+        print("🔍 DRY RUN MODE - No changes will be made")
+    if args.team:
+        print(f"Team filter: {args.team}")
+    if args.force:
+        print("⚠️ Force mode - ignoring cache")
+    print()
 
-    total = 0
+    total_matches = 0
 
     async with AsyncSessionLocal() as session:
-        for team_id, team_info in TEAMS.items():
+        teams_to_sync = {args.team: TEAMS[args.team]} if args.team and args.team in TEAMS else TEAMS
+
+        for team_id, team_info in teams_to_sync.items():
             try:
-                synced = await sync_team(team_id, team_info, session)
-                total += synced
+                matches = await sync_team_v2(team_id, team_info, session, args)
+                total_matches += matches
             except Exception as e:
                 print(f"❌ Error syncing {team_info['name']}: {e}")
                 import traceback
                 traceback.print_exc()
 
-        await session.commit()
+        if not args.dry_run:
+            await session.commit()
 
     print("\n" + "=" * 60)
-    print(f"✅ SYNC COMPLETE: {total} players updated")
+    if args.dry_run:
+        print(f"🔍 DRY RUN COMPLETE: {total_matches} matches would be synced")
+    else:
+        print(f"✅ SYNC COMPLETE: {total_matches} matches processed")
     print("=" * 60)
 
 
