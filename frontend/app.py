@@ -183,6 +183,16 @@ def fetch_leagues() -> List[dict]:
         return []
 
 
+def fetch_filter_options() -> dict:
+    """Fetch filter options for autocomplete (names, teams, leagues)."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/players/filters")
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        return {"names": [], "teams": [], "leagues": []}
+
+
 # ============================================
 # SIDEBAR
 # ============================================
@@ -228,22 +238,28 @@ with tab1:
 with tab2:
     st.header("Player Search")
 
-    # Search filters
+    # Fetch filter options for autocomplete
+    filter_options = fetch_filter_options()
+
+    # Search filters with autocomplete
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        search_name = st.text_input("Name", placeholder="e.g. Lewandowski")
+        name_options = [""] + filter_options.get("names", [])
+        search_name = st.selectbox("Name", name_options, index=0, placeholder="Select or type...")
     with col2:
-        search_team = st.text_input("Club", placeholder="e.g. Barcelona")
+        team_options = [""] + filter_options.get("teams", [])
+        search_team = st.selectbox("Club", team_options, index=0, placeholder="Select or type...")
     with col3:
-        search_league = st.text_input("League", placeholder="e.g. La Liga")
+        league_options = [""] + filter_options.get("leagues", [])
+        search_league = st.selectbox("League", league_options, index=0, placeholder="Select or type...")
 
     if st.button("🔍 Search", type="primary"):
         if search_name or search_team or search_league:
             with st.spinner("Searching..."):
                 players = fetch_players(
-                    name=search_name,
-                    team=search_team,
-                    league=search_league,
+                    name=search_name if search_name else None,
+                    team=search_team if search_team else None,
+                    league=search_league if search_league else None,
                 )
 
             if players:
@@ -258,7 +274,14 @@ with tab2:
     # Player selection and detailed stats display
     if "search_results" in st.session_state and st.session_state["search_results"]:
         players = st.session_state["search_results"]
-        player_options = {f"{p['name']} ({p.get('team', 'N/A')})": p for p in players}
+
+        # Build options with GK indicator
+        player_options = {}
+        for p in players:
+            label = f"{p['name']} ({p.get('team', 'N/A')})"
+            if p.get('position') == 'GK':
+                label = f"🧤 {label}"
+            player_options[label] = p
 
         selected = st.selectbox("Select player to view details:", options=list(player_options.keys()))
         selected_player = player_options[selected]
@@ -272,9 +295,14 @@ with tab2:
 
         if detailed_stats:
             st.markdown("---")
-            st.subheader(f"📊 {detailed_stats['player_name']} - {detailed_stats['player_team']}")
 
+            # Header with GK badge if applicable
             is_gk = detailed_stats.get("player_position") == "GK"
+            header_text = f"📊 {detailed_stats['player_name']}"
+            if is_gk:
+                header_text += " 🧤 Goalkeeper"
+            header_text += f" - {detailed_stats['player_team']}"
+            st.subheader(header_text)
 
             # 4 columns: League | European | Domestic | Total
             col1, col2, col3, col4 = st.columns(4)
@@ -300,12 +328,12 @@ with tab2:
                         st.markdown("""
                         <table style="width: 100%; border-collapse: collapse;">
                             <tr style="border-bottom: 1px solid #333;">
-                                <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: left;">Games</th>
+                                <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Games</th>
                                 <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">CS</th>
                                 <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">GA</th>
                             </tr>
                             <tr>
-                                <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0;">{}</td>
+                                <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
                                 <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
                                 <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
                             </tr>
@@ -320,12 +348,12 @@ with tab2:
                         st.markdown("""
                         <table style="width: 100%; border-collapse: collapse;">
                             <tr style="border-bottom: 1px solid #333;">
-                                <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: left;">Games</th>
+                                <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Games</th>
                                 <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Goals</th>
                                 <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Assists</th>
                             </tr>
                             <tr>
-                                <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0;">{}</td>
+                                <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
                                 <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
                                 <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
                             </tr>

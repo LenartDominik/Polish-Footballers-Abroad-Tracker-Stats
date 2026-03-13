@@ -20,6 +20,23 @@ router = APIRouter()
 logger = structlog.get_logger()
 
 
+@router.get("/filters")
+async def get_filter_options(db: AsyncSession = Depends(get_db)):
+    """Get unique filter options for search autocomplete."""
+    result = await db.execute(select(Player))
+    players = result.scalars().all()
+
+    names = sorted(set(p.name for p in players))
+    teams = sorted(set(p.team for p in players if p.team))
+    leagues = sorted(set(p.league for p in players if p.league))
+
+    return {
+        "names": names,
+        "teams": teams,
+        "leagues": leagues,
+    }
+
+
 @router.get("/", response_model=List[PlayerOut])
 async def list_players(
     league: Optional[str] = Query(None, description="Filter by league"),
