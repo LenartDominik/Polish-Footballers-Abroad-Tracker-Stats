@@ -273,6 +273,11 @@ async def get_player_detailed_stats(
     total_a_per90 = round(total_assists * 90 / total_minutes, 2) if total_minutes > 0 else 0.0
     avg_rating = round(sum(total_ratings) / len(total_ratings), 2) if total_ratings else 0.0
 
+    # Calculate save percentage for GK
+    total_save_pct = None
+    if is_goalkeeper and (total_saves + total_goals_against) > 0:
+        total_save_pct = round((total_saves / (total_saves + total_goals_against)) * 100, 1)
+
     total_out = CompetitionStatsOut(
         competition_type="total",
         competition_name="Season Total",
@@ -288,6 +293,7 @@ async def get_player_detailed_stats(
         # GK stats only for goalkeepers
         clean_sheets=total_clean_sheets if is_goalkeeper else None,
         saves=total_saves if is_goalkeeper else None,
+        save_percentage=total_save_pct,
         goals_against=total_goals_against if is_goalkeeper else None,
     )
 
