@@ -73,6 +73,9 @@ cd backend
 # Synchronizuj konkretnego piłkarza (najszybsze)
 uv run python sync_full.py --player RAPIDAPI_ID --force
 
+# Synchronizuj tylko bramkarzy
+uv run python sync_full.py --gk-only --force
+
 # Synchronizuj całą drużynę
 uv run python sync_full.py --full --team TEAM_ID --force
 
@@ -94,6 +97,7 @@ uv run python sync_full.py --player RAPIDAPI_ID --dry-run
 | Oskar Pietuszewski | 1647807 | 9773 | `--player 1647807` |
 | Jakub Kiwior | 490868 | 9773 | `--player 490868` |
 | Jan Bednarek | 1021834 | 9773 | `--player 1021834` |
+| Kamil Grabara | 760722 | 8721 | `--player 760722` |
 
 ### Jak dodać nowego piłkarza
 
