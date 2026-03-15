@@ -265,6 +265,9 @@ with tab2:
             if players:
                 st.success(f"Found {len(players)} players")
                 st.session_state["search_results"] = players
+                # Reset player selection when new search is performed
+                if "player_select" in st.session_state:
+                    del st.session_state["player_select"]
             else:
                 st.warning("No players found matching criteria")
                 st.session_state["search_results"] = []
@@ -283,7 +286,7 @@ with tab2:
                 label = f"🧤 {label}"
             player_options[label] = p
 
-        selected = st.selectbox("Select player to view details:", options=list(player_options.keys()))
+        selected = st.selectbox("Select player to view details:", options=list(player_options.keys()), key="player_select")
         selected_player = player_options[selected]
 
         # Season selector

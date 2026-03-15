@@ -31,10 +31,17 @@ load_dotenv()
 API_HOST = "free-api-live-football-data.p.rapidapi.com"
 API_KEY = settings.rapidapi_key
 
-# Polish player IDs to track (with correct Polish characters)
+# Polish player IDs to track: {rapidapi_id: {"name": str, "position": str}}
+# Positions: GK (bramkarz), DF (obrońca), MF (pomocnik), FW (napastnik)
 POLISH_PLAYERS = {
-    93447: "Robert Lewandowski",
-    169718: "Wojciech Szczęsny",
+    93447: {"name": "Robert Lewandowski", "position": "FW"},
+    169718: {"name": "Wojciech Szczęsny", "position": "GK"},
+    543298: {"name": "Krzysztof Piątek", "position": "FW"},
+    362212: {"name": "Piotr Zieliński", "position": "MF"},
+    1647807: {"name": "Oskar Pietuszewski", "position": "FW"},
+    490868: {"name": "Jan Bednarek", "position": "DF"},
+    1021834: {"name": "Jakub Kiwior", "position": "DF"},
+    760722: {"name": "Kamil Grabara", "position": "GK"},
 }
 
 # Teams to sync with multiple competitions
@@ -46,6 +53,44 @@ TEAMS = {
             {"name": "Copa del Rey", "league_id": 138},
             {"name": "Supercopa", "league_id": 139},
             {"name": "Champions League", "league_id": 42},
+        ],
+    },
+    203826: {
+        "name": "Al-Duhail SC",
+        "competitions": [
+            {"name": "Qatar Stars League", "league_id": 535},
+            {"name": "QSL Cup", "league_id": 11017},
+            {"name": "AFC Champions League Elite", "league_id": 525},
+            {"name": "Amir of Qatar Cup", "league_id": 11018},
+            {"name": "Qatar Cup", "league_id": 11016},
+        ],
+    },
+    8636: {
+        "name": "Inter",
+        "competitions": [
+            {"name": "Serie A", "league_id": 55},
+            {"name": "Coppa Italia", "league_id": 141},
+            {"name": "Champions League", "league_id": 42},
+            {"name": "Supercoppa", "league_id": 222},
+        ],
+    },
+    9773: {
+        "name": "FC Porto",
+        "competitions": [
+            {"name": "Primeira Liga", "league_id": 61},
+            {"name": "Taça de Portugal", "league_id": 186},
+            {"name": "Taça da Liga", "league_id": 97},
+            {"name": "Supertaça", "league_id": 532},
+            {"name": "Champions League", "league_id": 42},
+            {"name": "Europa League", "league_id": 73},
+            {"name": "Europa League Qualification", "league_id": 10613},
+        ],
+    },
+    8721: {
+        "name": "VfL Wolfsburg",
+        "competitions": [
+            {"name": "Bundesliga", "league_id": 54},
+            {"name": "DFB-Pokal", "league_id": 209},
         ],
     },
 }
@@ -60,15 +105,19 @@ def map_competition_type(competition_name: str) -> str:
     """Map competition name to type (league, european, domestic)."""
     name_lower = competition_name.lower()
 
-    # European competitions
-    if any(x in name_lower for x in ["champions league", "europa league", "conference league"]):
+    # International/continental competitions (Champions League, etc.)
+    if any(x in name_lower for x in ["champions league", "europa league", "conference league", "afc champions"]):
         return "european"
 
-    # Domestic cups
-    if any(x in name_lower for x in ["copa del rey", "supercopa", "cup", "copa"]):
+    # Domestic cups (national cups, supercups)
+    # Note: "cup" is a common suffix for domestic cups
+    if any(x in name_lower for x in ["copa del rey", "supercopa", "copa", "taça", "taca", "qsl", "amir", "dfb-pokal", "pokal"]):
+        return "domestic"
+    # Also match "cup" but NOT "league cup" variations that are actually leagues
+    if "cup" in name_lower and "league" not in name_lower and "stars" not in name_lower:
         return "domestic"
 
-    # Default: league
+    # Default: league (national league competitions)
     return "league"
 
 
@@ -79,8 +128,23 @@ def parse_args():
     parser.add_argument("--full", action="store_true", help="Full sync (all matches, ignore cache)")
     parser.add_argument("--dry-run", action="store_true", help="Preview without saving to database")
     parser.add_argument("--team", type=int, help="Sync only specific team by ID (e.g., 8634 for Barcelona)")
+    parser.add_argument("--player", type=int, help="Sync only specific player by rapidapi_id (e.g., 1647807 for Pietuszewski)")
     parser.add_argument("--force", action="store_true", help="Force sync, ignore cache timing")
+    parser.add_argument("--gk-only", action="store_true", help="Sync only goalkeepers")
     return parser.parse_args()
+
+
+# Map player_id to team_id for --player option
+PLAYER_TEAMS = {
+    93447: 8634,    # Lewandowski -> Barcelona
+    169718: 8634,   # Szczęsny -> Barcelona
+    543298: 203826, # Piątek -> Al-Duhail
+    362212: 8636,   # Zieliński -> Inter
+    1647807: 9773,  # Pietuszewski -> Porto
+    490868: 9773,   # Bednarek -> Porto
+    1021834: 9773,  # Kiwior -> Porto
+    760722: 8721,   # Grabara -> Wolfsburg
+}
 
 
 # Sync state helpers
@@ -134,18 +198,25 @@ async def is_match_synced(session, match_id: int, team_id: int) -> bool:
 
 async def mark_match_synced(session, match_id: int, team_id: int, competition_id: int):
     """Mark a match as synced to prevent duplicate processing."""
-    synced = SyncedMatch(
+    stmt = insert(SyncedMatch).values(
         match_id=match_id,
         team_id=team_id,
         competition_id=competition_id,
-    )
-    session.add(synced)
+    ).on_conflict_do_nothing(constraint="uq_match_team")
+    await session.execute(stmt)
 
 
-async def sync_team_v2(team_id: int, team_info: dict, session, args):
-    """Sync Polish players with incremental support and per-competition stats."""
+async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filter: list[int] | None = None):
+    """Sync Polish players with incremental support and per-competition stats.
+
+    Args:
+        player_filter: If set, only sync these specific players (list of rapidapi_id)
+    """
     print(f"\n{'='*60}")
     print(f"SYNC: {team_info['name']} - {'FULL' if args.full else 'INCREMENTAL'}")
+    if player_filter:
+        names = [POLISH_PLAYERS.get(pid, {}).get('name', str(pid)) for pid in player_filter]
+        print(f"Player filter: {names}")
     print(f"{'='*60}")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -273,10 +344,22 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args):
 
                     found_players = []
                     gk_playing = None
+                    processed_players = set()  # Dedup: prevent counting same player twice
 
                     for player in all_players:
                         player_rapid_id = player.get("id")
+
+                        # Dedup: skip if already processed this player in this match
+                        if player_rapid_id in processed_players:
+                            continue
+                        processed_players.add(player_rapid_id)
+
+                        # Filter by POLISH_PLAYERS
                         if player_rapid_id not in POLISH_PLAYERS:
+                            continue
+
+                        # Filter by specific players if --player or --gk-only option
+                        if player_filter and player_rapid_id not in player_filter:
                             continue
 
                         is_starter = player_rapid_id in starter_ids
@@ -294,13 +377,17 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args):
                         if not player_db:
                             player_db = Player(
                                 rapidapi_id=player_rapid_id,
-                                name=POLISH_PLAYERS[player_rapid_id],
-                                position="ST" if player_rapid_id == 93447 else "GK",
+                                name=POLISH_PLAYERS[player_rapid_id]["name"],
+                                position=POLISH_PLAYERS[player_rapid_id]["position"],
                                 team=team_info["name"],
                                 league="Multiple",
                             )
                             session.add(player_db)
                             await session.flush()
+                        else:
+                            # Update existing player info (position, team)
+                            player_db.position = POLISH_PLAYERS[player_rapid_id]["position"]
+                            player_db.team = team_info["name"]
 
                         # Update stats for this competition
                         stats = stats_by_competition[(comp_type, comp_name, comp_id)][player_db.id]
@@ -319,16 +406,16 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args):
                         if rating:
                             stats["ratings"].append(rating)
 
-                        # Check if GK
+                        # Check if GK (use position from POLISH_PLAYERS or API fallback)
                         is_gk = (
+                            POLISH_PLAYERS.get(player_rapid_id, {}).get("position") == "GK" or
                             player.get("positionId") == 11 or
-                            player.get("usualPlayingPositionId") == 0 or
-                            player_rapid_id == 169718
+                            player.get("usualPlayingPositionId") == 0
                         )
                         if is_gk:
                             gk_playing = (player_db.id, player_rapid_id)
 
-                        found_players.append(f"{POLISH_PLAYERS[player_rapid_id]} ({parsed['minutes']}')")
+                        found_players.append(f"{POLISH_PLAYERS[player_rapid_id]['name']} ({parsed['minutes']}')")
 
                     # Fetch GK stats if needed
                     if gk_playing:
@@ -337,6 +424,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args):
                             match_stats = await get_match_all_stats(event_id, client)
                             api_calls += 2
                             gk_stats = extract_gk_match_stats(match_score, match_stats, is_home)
+                            print(f"   GK stats: saves={gk_stats['saves']}, GA={gk_stats['goals_against']}, CS={gk_stats['clean_sheet']}")
 
                             stats = stats_by_competition[(comp_type, comp_name, comp_id)][gk_playing[0]]
                             stats["clean_sheets"] += 1 if gk_stats["clean_sheet"] else 0
@@ -344,7 +432,9 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args):
                             stats["goals_against"] += gk_stats["goals_against"]
                             stats["shots_on_target_against"] += gk_stats["shots_on_target_against"]
                         except Exception as e:
-                            print(f"GK error: {e}")
+                            print(f"   GK error: {e}")
+                            import traceback
+                            traceback.print_exc()
 
                     # Mark match as synced
                     await mark_match_synced(session, event_id, team_id, comp_id)
@@ -429,6 +519,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args):
                     comp_stats.clean_sheets = stats["clean_sheets"]
                     comp_stats.saves = stats["saves"]
                     comp_stats.goals_against = stats["goals_against"]
+                    comp_stats.shots_on_target_against = stats["shots_on_target_against"]
                     if stats["shots_on_target_against"] > 0:
                         comp_stats.save_percentage = round(
                             stats["saves"] / stats["shots_on_target_against"] * 100, 1
@@ -491,6 +582,8 @@ async def aggregate_to_season_total(session, team_id: int):
                 total["saves"] += cs.saves
             if cs.goals_against:
                 total["goals_against"] += cs.goals_against
+            if cs.shots_on_target_against:
+                total["shots_on_target_against"] += cs.shots_on_target_against
 
         # Get or create PlayerStats
         result = await session.execute(
@@ -781,20 +874,66 @@ async def main():
     """Main sync function with CLI support."""
     args = parse_args()
 
-    mode = "FULL" if args.full else "INCREMENTAL"
-    print("=" * 60)
-    print(f"🔄 SYNC: Polish Players ({mode})")
-    print("=" * 60)
-    print(f"API Host: {API_HOST}")
-    print(f"Season: {CURRENT_SEASON}")
-    print(f"Players: {list(POLISH_PLAYERS.values())}")
-    if args.dry_run:
-        print("🔍 DRY RUN MODE - No changes will be made")
-    if args.team:
-        print(f"Team filter: {args.team}")
-    if args.force:
-        print("⚠️ Force mode - ignoring cache")
-    print()
+    # Handle --gk-only option: filter to goalkeepers only
+    if args.gk_only:
+        player_filter = [pid for pid, info in POLISH_PLAYERS.items() if info.get("position") == "GK"]
+        gk_names = [POLISH_PLAYERS[pid]["name"] for pid in player_filter]
+        print("=" * 60)
+        print(f"🔄 SYNC: Goalkeepers Only")
+        print("=" * 60)
+        print(f"API Host: {API_HOST}")
+        print(f"Season: {CURRENT_SEASON}")
+        print(f"Goalkeepers: {gk_names}")
+        if args.dry_run:
+            print("🔍 DRY RUN MODE - No changes will be made")
+        if args.force:
+            print("⚠️ Force mode - ignoring cache")
+        print()
+    # Handle --player option: find team and filter to single player
+    elif args.player:
+        if args.player not in POLISH_PLAYERS:
+            print(f"❌ Player {args.player} not found in POLISH_PLAYERS")
+            print(f"   Available: {list(POLISH_PLAYERS.keys())}")
+            return
+        if args.player not in PLAYER_TEAMS:
+            print(f"❌ Player {args.player} not found in PLAYER_TEAMS mapping")
+            print(f"   Add the player's team_id to PLAYER_TEAMS dict")
+            return
+
+        player_filter = [args.player]
+        player_name = POLISH_PLAYERS[args.player]["name"]
+        team_id = PLAYER_TEAMS[args.player]
+
+        # Override args.team to sync only this player's team
+        args.team = team_id
+        args.full = True  # Force full sync for single player
+
+        print("=" * 60)
+        print(f"🔄 SYNC: Single Player ({player_name})")
+        print("=" * 60)
+        print(f"API Host: {API_HOST}")
+        print(f"Season: {CURRENT_SEASON}")
+        print(f"Player: {player_name} (id={args.player})")
+        print(f"Team: {TEAMS[team_id]['name']} (id={team_id})")
+        if args.force:
+            print("⚠️ Force mode - ignoring cache")
+        print()
+    else:
+        player_filter = None
+        mode = "FULL" if args.full else "INCREMENTAL"
+        print("=" * 60)
+        print(f"🔄 SYNC: Polish Players ({mode})")
+        print("=" * 60)
+        print(f"API Host: {API_HOST}")
+        print(f"Season: {CURRENT_SEASON}")
+        print(f"Players: {[p['name'] for p in POLISH_PLAYERS.values()]}")
+        if args.dry_run:
+            print("🔍 DRY RUN MODE - No changes will be made")
+        if args.team:
+            print(f"Team filter: {args.team}")
+        if args.force:
+            print("⚠️ Force mode - ignoring cache")
+        print()
 
     total_matches = 0
 
@@ -803,7 +942,7 @@ async def main():
 
         for team_id, team_info in teams_to_sync.items():
             try:
-                matches = await sync_team_v2(team_id, team_info, session, args)
+                matches = await sync_team_v2(team_id, team_info, session, args, player_filter)
                 total_matches += matches
             except Exception as e:
                 print(f"❌ Error syncing {team_info['name']}: {e}")

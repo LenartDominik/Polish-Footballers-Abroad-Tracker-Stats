@@ -1,0 +1,16 @@
+[project]
+name = "polish-footballers-frontend"
+version = "0.1.0"
+description = "Streamlit frontend for Polish Footballers Abroad Tracker"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.40.0",
+    "requests>=2.32.0",
+    "plotly>=5.24.0",
+    "pandas>=2.2.0",
+    "httpx>=0.28.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.uv]
+dev-dependencies = []

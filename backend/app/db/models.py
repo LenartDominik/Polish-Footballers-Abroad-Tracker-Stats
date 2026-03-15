@@ -84,7 +84,7 @@ class PlayerStats(Base):
     clean_sheets: Mapped[int] = mapped_column(Integer, default=0)
     clean_sheets_percentage: Mapped[float] = mapped_column(Numeric(5, 2), default=0)
     saves: Mapped[int] = mapped_column(Integer, default=0)
-    save_percentage: Mapped[float] = mapped_column(Numeric(5, 3), default=0)
+    save_percentage: Mapped[float] = mapped_column(Numeric(6, 2), default=0)
     goals_against: Mapped[int] = mapped_column(Integer, default=0)
     goals_against_per90: Mapped[float] = mapped_column(Numeric(5, 3), default=0)
     penalties_saved: Mapped[int] = mapped_column(Integer, default=0)
@@ -150,8 +150,9 @@ class PlayerStatsByCompetition(Base):
     # Goalkeeper stats (nullable)
     clean_sheets: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     saves: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    save_percentage: Mapped[Optional[float]] = mapped_column(Numeric(5, 3), nullable=True)
+    save_percentage: Mapped[Optional[float]] = mapped_column(Numeric(6, 2), nullable=True)
     goals_against: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    shots_on_target_against: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Cache
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
