@@ -31,7 +31,8 @@ cd backend
 uv run python sync_full.py                 # Incremental sync (default)
 uv run python sync_full.py --dry-run       # Preview without saving
 uv run python sync_full.py --full          # Full sync (all matches)
-uv run python sync_full.py --team 8634     # Sync specific team only
+uv run python sync_full.py --player 1647807  # Sync specific player only
+uv run python sync_full.py --gk-only       # Sync goalkeepers only
 uv run python sync_full.py --force         # Ignore cache timing
 ```
 
@@ -82,7 +83,8 @@ backend/app/
 1. Find `rapidapi_id` via RapidAPI
 2. Add to `POLISH_PLAYERS` dict in `sync_full.py`
 3. Add team to `TEAMS` if new
-4. Run `python sync_full.py --full --team TEAM_ID`
+4. Add player's team_id to `PLAYER_TEAMS` mapping
+5. Run `python sync_full.py --player RAPIDAPI_ID`
 
 ### Position-specific stats in API
 Check `player.position == "GK"` before returning stats:

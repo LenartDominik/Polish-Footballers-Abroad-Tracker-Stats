@@ -115,8 +115,11 @@ uv run python sync_full.py --full
 # Podgląd bez zapisu
 uv run python sync_full.py --dry-run
 
-# Tylko konkretny zespół
-uv run python sync_full.py --team 8634
+# Tylko konkretny gracz
+uv run python sync_full.py --player 1647807
+
+# Tylko bramkarze
+uv run python sync_full.py --gk-only
 
 # Wymuś sync mimo cache
 uv run python sync_full.py --force
@@ -128,7 +131,8 @@ uv run python sync_full.py --force
 |----------|------|
 | `--full` | Pełny sync, ignoruj cache |
 | `--dry-run` | Podgląd bez zapisu do bazy |
-| `--team ID` | Sync tylko konkretnego zespołu |
+| `--player ID` | Sync tylko konkretnego gracza (automatycznie full) |
+| `--gk-only` | Sync tylko bramkarzy |
 | `--force` | Ignoruj timing cache |
 
 ## Baza danych
@@ -172,8 +176,9 @@ POLISH_PLAYERS = {
 **Kroki:**
 1. Znajdź `rapidapi_id` piłkarza (przez RapidAPI lub w meczu)
 2. Dodaj do `POLISH_PLAYERS` w `sync_full.py`
-3. Jeśli nowy zespół - dodaj do `TEAMS`
-4. Uruchom `python sync_full.py --full --team TEAM_ID`
+3. Dodaj `team_id` do `PLAYER_TEAMS` mapping
+4. Jeśli nowy zespół - dodaj do `TEAMS`
+5. Uruchom `python sync_full.py --player RAPIDAPI_ID`
 
 > **Uwaga:** Po MVP zostanie zaimplementowane automatyczne wykrywanie Polaków. Zobacz `PLAN_AUTO_DETECT_PLAYERS.md`.
 
