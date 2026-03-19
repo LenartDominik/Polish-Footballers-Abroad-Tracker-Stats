@@ -71,13 +71,10 @@ uv run streamlit run app.py
 cd backend
 
 # Synchronizuj konkretnego piłkarza (najszybsze)
-uv run python sync_full.py --player RAPIDAPI_ID --force
+uv run python sync_full.py --player RAPIDAPI_ID
 
 # Synchronizuj tylko bramkarzy
 uv run python sync_full.py --gk-only --force
-
-# Synchronizuj całą drużynę
-uv run python sync_full.py --full --team TEAM_ID --force
 
 # Synchronizuj wszystkich piłkarzy
 uv run python sync_full.py --full --force

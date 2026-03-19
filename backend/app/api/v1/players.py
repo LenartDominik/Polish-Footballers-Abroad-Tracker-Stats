@@ -119,7 +119,10 @@ async def get_player_stats(
     season: Optional[str] = Query(None, description="Season filter (default: current)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get player statistics for a season."""
+    """Get player statistics for a season.
+
+    Aggregates on-the-fly from PlayerStatsByCompetition to ensure data consistency.
+    """
     if not season:
         season = "2025/26"  # Default current season
 
@@ -132,58 +135,108 @@ async def get_player_stats(
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
 
-    # Get stats from DB
+    # Get stats by competition and aggregate on-the-fly
     result = await db.execute(
-        select(PlayerStats).where(
-            PlayerStats.player_id == player_id,
-            PlayerStats.season == season,
+        select(PlayerStatsByCompetition).where(
+            PlayerStatsByCompetition.player_id == player_id,
+            PlayerStatsByCompetition.season == season,
         )
     )
-    stats = result.scalar_one_or_none()
+    comp_stats_list = result.scalars().all()
 
-    if not stats:
+    if not comp_stats_list:
         raise HTTPException(
             status_code=404,
             detail=f"Player stats not found for season {season}",
         )
 
+    # Aggregate totals from all competitions
+    total_matches = 0
+    total_started = 0
+    total_subbed = 0
+    total_minutes = 0
+    total_goals = 0
+    total_assists = 0
+    total_yellow = 0
+    total_red = 0
+    total_ratings = []
+    total_clean_sheets = 0
+    total_saves = 0
+    total_goals_against = 0
+
+    for cs in comp_stats_list:
+        total_matches += cs.matches_total
+        total_started += cs.matches_started
+        total_subbed += cs.matches_subbed
+        total_minutes += cs.minutes_played
+        total_goals += cs.goals
+        total_assists += cs.assists
+        total_yellow += cs.yellow_cards
+        total_red += cs.red_cards
+        if cs.rating:
+            total_ratings.append(float(cs.rating))
+        if cs.clean_sheets:
+            total_clean_sheets += cs.clean_sheets
+        if cs.saves:
+            total_saves += cs.saves
+        if cs.goals_against:
+            total_goals_against += cs.goals_against
+
+    # Calculate per-90 stats
+    total_g_per90 = round(total_goals * 90 / total_minutes, 2) if total_minutes > 0 else 0.0
+    total_a_per90 = round(total_assists * 90 / total_minutes, 2) if total_minutes > 0 else 0.0
+    avg_rating = round(sum(total_ratings) / len(total_ratings), 2) if total_ratings else 0.0
+
     # Goalkeeper stats only for GK position
     is_goalkeeper = player.position == "GK"
 
-    result = {
-        "id": stats.id,
-        "player_id": stats.player_id,
-        "season": stats.season,
-        "matches_total": stats.matches_total,
-        "matches_started": stats.matches_started,
-        "matches_subbed": stats.matches_subbed,
-        "minutes_played": stats.minutes_played,
-        "goals": stats.goals,
-        "assists": stats.assists,
-        "yellow_cards": stats.yellow_cards,
-        "red_cards": stats.red_cards,
-        "rating": float(stats.rating) if stats.rating else 0.0,
+    # Calculate save percentage for GK
+    save_pct = None
+    if is_goalkeeper and (total_saves + total_goals_against) > 0:
+        save_pct = round((total_saves / (total_saves + total_goals_against)) * 100, 1)
+
+    # Calculate clean sheets percentage for GK
+    cs_pct = None
+    if is_goalkeeper and total_matches > 0:
+        cs_pct = round((total_clean_sheets / total_matches) * 100, 1)
+
+    # Calculate goals against per 90 for GK
+    ga_per90 = None
+    if is_goalkeeper and total_minutes > 0:
+        ga_per90 = round(total_goals_against * 90 / total_minutes, 2)
+
+    return {
+        "id": comp_stats_list[0].id,  # Use first competition stat id as reference
+        "player_id": player_id,
+        "season": season,
+        "matches_total": total_matches,
+        "matches_started": total_started,
+        "matches_subbed": total_subbed,
+        "minutes_played": total_minutes,
+        "goals": total_goals,
+        "assists": total_assists,
+        "yellow_cards": total_yellow,
+        "red_cards": total_red,
+        "rating": avg_rating,
         "player_name": player.name,
         "player_position": player.position,
         "player_team": player.team,
-        "updated_at": stats.updated_at,
+        "updated_at": datetime.utcnow(),  # Always show current time since we aggregate live
         # Field player stats (None for GK)
-        "penalties_scored": None if is_goalkeeper else stats.penalties_scored,
-        "penalties_missed": None if is_goalkeeper else stats.penalties_missed,
-        "g_per90": None if is_goalkeeper else (float(stats.g_per90) if stats.g_per90 else 0.0),
-        "a_per90": None if is_goalkeeper else (float(stats.a_per90) if stats.a_per90 else 0.0),
+        "penalties_scored": None if is_goalkeeper else 0,  # Not tracked per competition
+        "penalties_missed": None if is_goalkeeper else 0,  # Not tracked per competition
+        "g_per90": None if is_goalkeeper else total_g_per90,
+        "a_per90": None if is_goalkeeper else total_a_per90,
         # Goalkeeper stats (None for field players)
-        "clean_sheets": stats.clean_sheets if is_goalkeeper else None,
-        "clean_sheets_percentage": float(stats.clean_sheets_percentage) if (is_goalkeeper and stats.clean_sheets_percentage is not None) else None,
-        "saves": stats.saves if is_goalkeeper else None,
-        "save_percentage": float(stats.save_percentage) if (is_goalkeeper and stats.save_percentage is not None) else None,
-        "goals_against": stats.goals_against if is_goalkeeper else None,
-        "goals_against_per90": float(stats.goals_against_per90) if (is_goalkeeper and stats.goals_against_per90 is not None) else None,
-        "penalties_saved": stats.penalties_saved if is_goalkeeper else None,
-        "penalties_conceded": stats.penalties_conceded if is_goalkeeper else None,
+        "clean_sheets": total_clean_sheets if is_goalkeeper else None,
+        "clean_sheets_percentage": cs_pct,
+        "saves": total_saves if is_goalkeeper else None,
+        "save_percentage": save_pct,
+        "goals_against": total_goals_against if is_goalkeeper else None,
+        "goals_against_per90": ga_per90,
+        "penalties_saved": None,  # Not tracked per competition
+        "penalties_conceded": None,  # Not tracked per competition
     }
-
-    return result
 
 
 @router.get("/{player_id}/detailed-stats", response_model=PlayerDetailedStatsOut, response_model_exclude_none=True)

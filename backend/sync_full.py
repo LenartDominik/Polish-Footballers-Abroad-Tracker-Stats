@@ -42,6 +42,11 @@ POLISH_PLAYERS = {
     490868: {"name": "Jan Bednarek", "position": "DF"},
     1021834: {"name": "Jakub Kiwior", "position": "DF"},
     760722: {"name": "Kamil Grabara", "position": "GK"},
+    908847: {"name": "Mateusz Żukowski", "position": "FW"},
+    630036: {"name": "Mateusz Lis", "position": "GK"},
+    954194: {"name": "Mateusz Bogusz", "position": "MF"},
+    742332: {"name": "Bartosz Slisz", "position": "MF"},
+    1051411: {"name": "Kacper Kozłowski", "position": "MF"},
 }
 
 # Teams to sync with multiple competitions
@@ -89,10 +94,45 @@ TEAMS = {
     8721: {
         "name": "VfL Wolfsburg",
         "competitions": [
-            {"name": "Bundesliga", "league_id": 54},
+            {"name": "2. Bundesliga", "league_id": 54},
             {"name": "DFB-Pokal", "league_id": 209},
         ],
     },
+    8188: {
+        "name": "1. FC Magdeburg",
+        "competitions": [
+            {"name": "2. Bundesliga", "league_id": 146},
+            {"name": "DFB-Pokal", "league_id": 209},
+        ],
+    },
+    1925:{
+        "name": "Göztepe",
+        "competitions": [
+            {"name": "Super Lig", "league_id": 71},
+            {"name": "Turkish Cup", "league_id": 151},
+        ],
+    },
+    8259: {
+        "name": "Houston Dynamo FC",
+        "competitions": [
+            {"name": "MLS", "league_id": 130},
+            {"name": "US Open Cup", "league_id": 9441},
+        ],
+},
+    8595: {
+        "name": "Brøndby IF",
+        "competitions": [
+            {"name": "Superligaen", "league_id": 46},
+            {"name": "DBU Pokalen", "league_id": 10046},
+        ],
+},  
+    4081: {
+        "name": "Gaziantep FK",
+        "competitions": [
+            {"name": "Süper Lig", "league_id": 71},
+            {"name": "Turkish Cup", "league_id": 151},
+        ],
+}
 }
 
 CURRENT_SEASON = "2025/26"
@@ -127,7 +167,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Sync Polish players stats")
     parser.add_argument("--full", action="store_true", help="Full sync (all matches, ignore cache)")
     parser.add_argument("--dry-run", action="store_true", help="Preview without saving to database")
-    parser.add_argument("--team", type=int, help="Sync only specific team by ID (e.g., 8634 for Barcelona)")
     parser.add_argument("--player", type=int, help="Sync only specific player by rapidapi_id (e.g., 1647807 for Pietuszewski)")
     parser.add_argument("--force", action="store_true", help="Force sync, ignore cache timing")
     parser.add_argument("--gk-only", action="store_true", help="Sync only goalkeepers")
@@ -144,6 +183,12 @@ PLAYER_TEAMS = {
     490868: 9773,   # Bednarek -> Porto
     1021834: 9773,  # Kiwior -> Porto
     760722: 8721,   # Grabara -> Wolfsburg
+    908847: 8188,   # Żukowski -> Magdeburg
+    630036: 1925,   # Lis -> Göztepe
+    954194: 8259,   #Bogusz - Houston Dynamo FC
+    742332: 8595,   #Slisz - Brøndby IF
+    1051411: 4081,  # Kacper Kozłowski - Gaziantep FK
+
 }
 
 
@@ -463,9 +508,10 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
 
         # Save stats to database
         if args.dry_run:
-            print(f"\n📊 DRY RUN - {matches_processed} matches would be synced")
-            print(f"   API calls: {api_calls}")
-            return matches_processed
+            print(f"\n📊 DRY RUN - {new_matches_synced} matches would be checked for lineups")
+            print(f"   Note: Actual synced matches depend on Polish players being in lineups")
+            print(f"   API calls so far: {api_calls}")
+            return new_matches_synced
 
         print(f"\n📊 Saving to database...")
         print(f"   API calls used: {api_calls}")
@@ -526,21 +572,30 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                         )
 
         # Aggregate to Season Total (player_stats)
-        await aggregate_to_season_total(session, team_id)
+        await aggregate_to_season_total(session, player_filter)
 
         return matches_processed
 
 
-async def aggregate_to_season_total(session, team_id: int):
-    """Aggregate all competition stats to player_stats (Season Total)."""
+async def aggregate_to_season_total(session, player_filter: list[int] | None = None):
+    """Aggregate all competition stats to player_stats (Season Total).
+
+    Args:
+        player_filter: If set, only aggregate these specific players (list of rapidapi_id)
+    """
     print(f"\n📊 Aggregating to Season Total...")
 
-    # Get all players with stats for this team
-    result = await session.execute(
-        select(Player).where(Player.team.ilike(f"%{team_id}%") | (Player.team == "Multiple"))
-    )
-    # Actually get all players that have stats_by_competition
-    result = await session.execute(select(Player))
+    # Build query based on filter
+    if player_filter:
+        # Only aggregate specific players
+        result = await session.execute(
+            select(Player).where(Player.rapidapi_id.in_(player_filter))
+        )
+        print(f"   Filtering to {len(player_filter)} player(s)")
+    else:
+        # Aggregate all players
+        result = await session.execute(select(Player))
+
     players = result.scalars().all()
 
     for player in players:
@@ -553,7 +608,36 @@ async def aggregate_to_season_total(session, team_id: int):
         )
         comp_stats_list = result.scalars().all()
 
+        # Create empty PlayerStats for new players without matches
         if not comp_stats_list:
+            # Check if PlayerStats already exists
+            result = await session.execute(
+                select(PlayerStats).where(
+                    PlayerStats.player_id == player.id,
+                    PlayerStats.season == CURRENT_SEASON,
+                )
+            )
+            db_stats = result.scalar_one_or_none()
+
+            if not db_stats:
+                # Create empty stats record for new player
+                db_stats = PlayerStats(
+                    player_id=player.id,
+                    season=CURRENT_SEASON,
+                    matches_total=0,
+                    matches_started=0,
+                    matches_subbed=0,
+                    minutes_played=0,
+                    goals=0,
+                    assists=0,
+                    yellow_cards=0,
+                    red_cards=0,
+                    rating=0.0,
+                    g_per90=0.0,
+                    a_per90=0.0,
+                )
+                session.add(db_stats)
+                print(f"   {player.name}: Created empty stats (no matches yet)")
             continue
 
         # Aggregate
@@ -929,8 +1013,6 @@ async def main():
         print(f"Players: {[p['name'] for p in POLISH_PLAYERS.values()]}")
         if args.dry_run:
             print("🔍 DRY RUN MODE - No changes will be made")
-        if args.team:
-            print(f"Team filter: {args.team}")
         if args.force:
             print("⚠️ Force mode - ignoring cache")
         print()
@@ -954,7 +1036,8 @@ async def main():
 
     print("\n" + "=" * 60)
     if args.dry_run:
-        print(f"🔍 DRY RUN COMPLETE: {total_matches} matches would be synced")
+        print(f"🔍 DRY RUN COMPLETE: {total_matches} matches would be checked for lineups")
+        print("   Run without --dry-run to see actual sync results")
     else:
         print(f"✅ SYNC COMPLETE: {total_matches} matches processed")
     print("=" * 60)
