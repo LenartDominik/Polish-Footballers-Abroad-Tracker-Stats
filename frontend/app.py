@@ -126,19 +126,6 @@ def fetch_top_players(season: str = "2025/26", limit: int = 10) -> List[dict]:
         return []
 
 
-def fetch_top_week(limit: int = 5) -> List[dict]:
-    """Fetch top players of the week."""
-    try:
-        response = requests.get(
-            f"{API_BASE_URL}/players/top_week",
-            params={"limit": limit}
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException:
-        return []
-
-
 def fetch_player_stats(player_id: int, season: Optional[str] = None) -> Optional[dict]:
     """Fetch player statistics."""
     params = {}
@@ -218,22 +205,7 @@ st.markdown("Track Polish footballers playing in the world's top leagues!")
 tab1, tab2, tab3 = st.tabs(["🏆 Dashboard", "🔍 Search", "⚖️ Compare"])
 
 with tab1:
-    st.header("Top of the Week")
-
-    # Top week players
-    top_week = fetch_top_week(5)
-    if top_week:
-        cols = st.columns(min(len(top_week), 5))
-        for i, player in enumerate(top_week[:5]):
-            with cols[i]:
-                st.metric(
-                    label=f"⚽ {player.get('player_name', 'N/A')}",
-                    value=f"{player.get('goals', 0)} goli",
-                    delta=f"{player.get('xg_per90', 0):.2f} xG/90"
-                )
-
-    st.markdown("---")
-    st.info("🎯 Data sync running - check the Search tab")
+    st.info("🎯 Use the Search tab to find and view player statistics")
 
 with tab2:
     st.header("Player Search")
