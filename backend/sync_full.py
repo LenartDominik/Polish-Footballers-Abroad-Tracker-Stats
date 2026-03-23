@@ -96,7 +96,7 @@ TEAMS = {
     8721: {
         "name": "VfL Wolfsburg",
         "competitions": [
-            {"name": "2. Bundesliga", "league_id": 54},
+            {"name": "Bundesliga", "league_id": 54},
             {"name": "DFB-Pokal", "league_id": 209},
         ],
     },
