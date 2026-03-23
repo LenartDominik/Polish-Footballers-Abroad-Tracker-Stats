@@ -47,6 +47,8 @@ POLISH_PLAYERS = {
     954194: {"name": "Mateusz Bogusz", "position": "MF"},
     742332: {"name": "Bartosz Slisz", "position": "MF"},
     1051411: {"name": "Kacper Kozłowski", "position": "MF"},
+    1053714: {"name": "Nicola Zalewski", "position": "MF"},
+    1511063: {"name": "Jan Ziółkowski", "position": "DF"},
 }
 
 # Teams to sync with multiple competitions
@@ -132,6 +134,22 @@ TEAMS = {
             {"name": "Süper Lig", "league_id": 71},
             {"name": "Turkish Cup", "league_id": 151},
         ],
+},
+    8524: {
+        "name": "Atalanta Bergamo",
+        "competitions": [
+            {"name": "Serie A", "league_id": 55},
+            {"name": "Coppa Italia", "league_id": 141},
+            {"name": "Champions League", "league_id": 42},
+        ]
+    },
+    8686: {
+        "name": "AS Roma",
+        "competitions": [
+            {"name": "Serie A", "league_id": 55},
+            {"name": "Coppa Italia", "league_id": 141},
+            {"name": "Europa League", "league_id": 73},
+        ]
 }
 }
 
@@ -151,7 +169,7 @@ def map_competition_type(competition_name: str) -> str:
 
     # Domestic cups (national cups, supercups)
     # Note: "cup" is a common suffix for domestic cups
-    if any(x in name_lower for x in ["copa del rey", "supercopa", "copa", "taça", "taca", "qsl", "amir", "dfb-pokal", "pokal"]):
+    if any(x in name_lower for x in ["copa del rey", "supercopa", "coppa italia", "copa", "taça", "taca", "qsl", "amir", "dfb-pokal", "pokal"]):
         return "domestic"
     # Also match "cup" but NOT "league cup" variations that are actually leagues
     if "cup" in name_lower and "league" not in name_lower and "stars" not in name_lower:
@@ -188,6 +206,8 @@ PLAYER_TEAMS = {
     954194: 8259,   #Bogusz - Houston Dynamo FC
     742332: 8595,   #Slisz - Brøndby IF
     1051411: 4081,  # Kacper Kozłowski - Gaziantep FK
+    1053714: 8524,  # Nicola Zalewski - Atalanta Bergamo
+    1511063: 8686, # Jan Ziółkowski - AS Roma
 
 }
 
@@ -659,7 +679,7 @@ async def aggregate_to_season_total(session, player_filter: list[int] | None = N
             total["yellow_cards"] += cs.yellow_cards
             total["red_cards"] += cs.red_cards
             if cs.rating:
-                total["ratings"].append(cs.rating)
+                total["ratings"].append(float(cs.rating))
             if cs.clean_sheets:
                 total["clean_sheets"] += cs.clean_sheets
             if cs.saves:
@@ -932,7 +952,8 @@ def parse_player_performance(player: dict, is_starter: bool) -> dict:
             sub_time = sub.get("time", 0)
 
             if sub_type == "subin":
-                result["minutes"] = 90 - sub_time
+                # Calculate minutes played (minimum 1 if subbed in at 90')
+                result["minutes"] = max(1, 90 - sub_time)
 
     # If still 0 minutes, player didn't play
     if result["minutes"] == 0:
@@ -1016,6 +1037,10 @@ async def main():
         if args.force:
             print("⚠️ Force mode - ignoring cache")
         print()
+
+    # Initialize team to None (set by --player option)
+    if not hasattr(args, 'team'):
+        args.team = None
 
     total_matches = 0
 
