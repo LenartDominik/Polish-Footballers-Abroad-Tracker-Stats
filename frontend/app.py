@@ -392,6 +392,14 @@ with tab2:
                                     <span style="color: #fff; font-weight: 500;">{minutes:,}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                                    <span>G/90</span>
+                                    <span style="color: #fff; font-weight: 500;">{g_per90:.2f}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                                    <span>A/90</span>
+                                    <span style="color: #fff; font-weight: 500;">{a_per90:.2f}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                                     <span>G+A/90</span>
                                     <span style="color: #fff; font-weight: 500;">{ga_per90:.2f}</span>
                                 </div>
