@@ -71,7 +71,7 @@ async def search_players(
     """
     Search for Polish players abroad.
 
-    All filters are independent (OR logic between them).
+    All filters work together (AND logic between them).
     At least one filter must be provided.
     """
     if not any([name, team, league]):
@@ -80,16 +80,16 @@ async def search_players(
             detail="At least one filter (name, team, or league) is required",
         )
 
-    # Build query with OR conditions
-    conditions = []
+    # Build query with AND conditions
+    query = select(Player)
     if name:
-        conditions.append(Player.name.ilike(f"%{name}%"))
+        query = query.where(Player.name.ilike(f"%{name}%"))
     if team:
-        conditions.append(Player.team.ilike(f"%{team}%"))
+        query = query.where(Player.team.ilike(f"%{team}%"))
     if league:
-        conditions.append(Player.league.ilike(f"%{league}%"))
+        query = query.where(Player.league.ilike(f"%{league}%"))
 
-    query = select(Player).where(or_(*conditions)).limit(limit)
+    query = query.limit(limit)
     result = await db.execute(query)
     players = result.scalars().all()
 

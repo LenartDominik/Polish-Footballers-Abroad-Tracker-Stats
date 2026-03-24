@@ -1,31 +1,66 @@
 # -*- coding: utf-8 -*-
 """Sync: Polish players with minutes from lineups. Supports incremental and full sync."""
 
+from __future__ import annotations
+
 import argparse
 import asyncio
 import sys
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
+from typing import TypedDict
+
+
+class PlayerMatchStats(TypedDict):
+    """Stats dict for accumulating player stats during sync."""
+    minutes: int
+    goals: int
+    assists: int
+    yellow_cards: int
+    red_cards: int
+    matches_total: int
+    matches_started: int
+    matches_subbed: int
+    ratings: list[float]
+    clean_sheets: int
+    saves: int
+    goals_against: int
+    shots_on_target_against: int
+
+
+def _make_player_stats() -> PlayerMatchStats:
+    """Factory function for default player stats."""
+    return {
+        "minutes": 0, "goals": 0, "assists": 0,
+        "yellow_cards": 0, "red_cards": 0,
+        "matches_total": 0, "matches_started": 0, "matches_subbed": 0,
+        "ratings": [],
+        "clean_sheets": 0, "saves": 0, "goals_against": 0,
+        "shots_on_target_against": 0,
+    }
+
 
 # Fix Windows encoding issues
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stdout:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[misc]
+    if sys.stderr:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[misc]
 
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+import httpx
 from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-import httpx
+
+load_dotenv()
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.db.models import Player, PlayerStats, PlayerStatsByCompetition, SyncState, SyncedMatch
 from app.services.rapidapi import calculate_per_90
-
-load_dotenv()
 
 # Configuration
 API_HOST = "free-api-live-football-data.p.rapidapi.com"
@@ -49,6 +84,18 @@ POLISH_PLAYERS = {
     1051411: {"name": "Kacper Kozłowski", "position": "MF"},
     1053714: {"name": "Nicola Zalewski", "position": "MF"},
     1511063: {"name": "Jan Ziółkowski", "position": "DF"},
+    557396: {"name": "Adam Buksa", "position": "FW"},
+    1067260: {"name": "Jakub Kamiński", "position": "MF"},
+    1800401: {"name": "Kacper Potulski", "position": "DF"},
+    361712: {"name": "Adam Dźwigała", "position": "DF"},
+    1112702: {"name": "Arkadiusz Pyrka", "position": "MF"},
+    502543: {"name": "Dawid Kownacki", "position": "FW"},
+    1053713: {"name": "Maik Nawrocki", "position": "DF"},
+    1065940: {"name": "Michał Karbownik", "position": "DF"},
+    1355526: {"name": "Maxi Oyedele", "position": "MF"},
+    402419: {"name": "Przemysław Frankowski", "position": "MF"},
+    765466: {"name": "Sebastian Szymański", "position": "MF"},
+    891855: {"name": "Jakub Moder", "position": "MF"},
 }
 
 # Teams to sync with multiple competitions
@@ -150,8 +197,76 @@ TEAMS = {
             {"name": "Coppa Italia", "league_id": 141},
             {"name": "Europa League", "league_id": 73},
         ]
+},
+    8600: {
+        "name": "Udinese",
+        "competitions": [
+            {"name": "Serie A", "league_id": 55},
+            {"name": "Coppa Italia", "league_id": 141},
+        ]
+    },
+    8722: {
+        "name": "1. FC Köln",
+        "competitions": [
+            {"name": "Bundesliga", "league_id": 54},
+            {"name": "DFB-Pokal", "league_id": 209},
+        ],
+    },
+    9905: {
+        "name": "Mainz 05",
+        "competitions": [
+            {"name": "Bundesliga", "league_id": 54},
+            {"name": "DFB-Pokal", "league_id": 209},
+            {"name": "Conference League", "league_id": 10216},
+        ],
+
+},
+    8152: {
+        "name": "St. Pauli",
+        "competitions": [
+            {"name": "Bundesliga", "league_id": 54},
+            {"name": "DFB-Pokal", "league_id": 209},
+        ],
+    },
+    8177: {
+        "name": "Hertha BSC",
+        "competitions": [
+            {"name": "2. Bundesliga", "league_id": 146},
+            {"name": "DFB-Pokal", "league_id": 209},
+        ],
+    },
+    9904: {
+        "name": "Hannover 96",
+        "competitions": [
+            {"name": "2. Bundesliga", "league_id": 146},
+            {"name": "DFB-Pokal", "league_id": 209},
+        ],
+    },
+    9848: {
+        "name": "Strasbourg",
+        "competitions": [
+            {"name": "Ligue 1", "league_id": 53},
+            {"name": "Coupe de France", "league_id": 134},
+            {"name": "Conference League", "league_id": 10216},
+        ],
+    },
+    9851: {
+        "name": "Rennes",
+        "competitions": [
+            {"name": "Ligue 1", "league_id": 53},
+            {"name": "Coupe de France", "league_id": 134},
+        ],
+},
+    10235: {
+        "name": "Feyenoord",
+        "competitions": [
+            {"name": "Eredivisie", "league_id": 57},
+            {"name": "KNVB Cup", "league_id": 235},
+            {"name": "Europa League", "league_id": 73},
+        ],
 }
 }
+
 
 CURRENT_SEASON = "2025/26"
 CACHE_TTL_HOURS = 24
@@ -208,7 +323,18 @@ PLAYER_TEAMS = {
     1051411: 4081,  # Kacper Kozłowski - Gaziantep FK
     1053714: 8524,  # Nicola Zalewski - Atalanta Bergamo
     1511063: 8686, # Jan Ziółkowski - AS Roma
-
+    557396: 8600,  # Adam Buksa - Udinese
+    1067260: 8722, # Jakub Kamiński - 1. FC Köln
+    1800401: 9905, # Kacper Potulski - Mainz 05
+    361712: 8152,  # Adam Dźwigała - St. Pauli
+    1112702: 8152,  # Arkadiusz Pyrka - St. Pauli
+    502543: 8177,  # Dawid Kownacki - Hertha BSC
+    1053713: 9904, # Maik Nawrocki - Hannover 96
+    1065940: 8177, # Michał Karbownik - Hertha BSC
+    1355526: 9848, # Maxi Oyedele - Strasbourg
+    402419: 9851,  # Przemysław Frankowski - Rennes
+    765466: 9851,  # Sebastian Szymański - Rennes
+    891855: 10235, # Jakub Moder - Feyenoord
 }
 
 
@@ -285,20 +411,15 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
     print(f"{'='*60}")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        # Collect stats per competition
-        stats_by_competition = defaultdict(lambda: defaultdict(lambda: {
-            "minutes": 0, "goals": 0, "assists": 0,
-            "yellow_cards": 0, "red_cards": 0,
-            "matches_total": 0, "matches_started": 0, "matches_subbed": 0,
-            "ratings": [],
-            # GK stats
-            "clean_sheets": 0, "saves": 0, "goals_against": 0,
-            "shots_on_target_against": 0,
-        }))
+        # Collect stats per competition - typed defaultdict
+        stats_by_competition: defaultdict[tuple[str, str, int], defaultdict[int, PlayerMatchStats]] = (
+            defaultdict(lambda: defaultdict(_make_player_stats))
+        )
 
         # Track processed matches for dedup
         matches_processed = 0
         api_calls = 0
+        new_matches_synced = 0  # Track total new matches synced across all competitions
 
         for competition in team_info.get("competitions", []):
             comp_name = competition["name"]
@@ -341,8 +462,10 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                 home = m.get("home", {}) or {}
                 away = m.get("away", {}) or {}
                 try:
-                    home_id = int(home.get("id")) if isinstance(home, dict) and home.get("id") else None
-                    away_id = int(away.get("id")) if isinstance(away, dict) and away.get("id") else None
+                    home_id_raw = home.get("id") if isinstance(home, dict) else None
+                    away_id_raw = away.get("id") if isinstance(away, dict) else None
+                    home_id = int(home_id_raw) if home_id_raw is not None else None  # type: ignore[arg-type]
+                    away_id = int(away_id_raw) if away_id_raw is not None else None  # type: ignore[arg-type]
                 except (ValueError, TypeError):
                     continue
 
@@ -370,7 +493,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                     last_match_id = sync_state.last_match_id or 0
 
             # Process each match
-            new_matches_synced = 0
+            comp_new_matches = 0
             max_match_id = last_match_id
 
             for match in team_matches:
@@ -389,7 +512,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
 
                 if args.dry_run:
                     print("DRY RUN")
-                    new_matches_synced += 1
+                    comp_new_matches += 1
                     max_match_id = max(max_match_id, event_id)
                     continue
 
@@ -509,7 +632,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                     else:
                         print("-")
 
-                    new_matches_synced += 1
+                    comp_new_matches += 1
                     max_match_id = max(max_match_id, event_id)
                     matches_processed += 1
 
@@ -519,12 +642,13 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                     print(f"ERROR: {e}")
 
             # Update sync state
-            if not args.dry_run and new_matches_synced > 0:
+            if not args.dry_run and comp_new_matches > 0:
                 await update_sync_state(
                     session, team_id, team_info["name"],
-                    comp_id, comp_name, max_match_id, new_matches_synced
+                    comp_id, comp_name, max_match_id, comp_new_matches
                 )
-                print(f"   ✅ Synced {new_matches_synced} new matches")
+                print(f"   ✅ Synced {comp_new_matches} new matches")
+            new_matches_synced += comp_new_matches  # Accumulate to outer counter
 
         # Save stats to database
         if args.dry_run:
@@ -907,7 +1031,7 @@ def extract_gk_match_stats(match_score_data: dict, match_stats_data: dict, is_ho
     return result
 
 
-def parse_player_performance(player: dict, is_starter: bool) -> dict:
+def parse_player_performance(player: dict, is_starter: bool) -> dict | None:
     """
     Parse player performance from lineup data.
 

@@ -93,7 +93,7 @@ def fetch_players(
     limit: int = 20,
 ) -> List[dict]:
     """Fetch players from API."""
-    params = {"limit": limit}
+    params: dict[str, str | int] = {"limit": limit}
     if name:
         params["name"] = name
     if team:
@@ -102,7 +102,11 @@ def fetch_players(
         params["league"] = league
 
     try:
-        response = requests.get(f"{API_BASE_URL}/players/search", params=params)
+        # Use /players/search only when filters are provided, otherwise /players/
+        if name or team or league:
+            response = requests.get(f"{API_BASE_URL}/players/search", params=params)
+        else:
+            response = requests.get(f"{API_BASE_URL}/players/", params=params)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
@@ -178,7 +182,40 @@ def fetch_filter_options() -> dict:
         return {"names": [], "teams": [], "leagues": []}
 
 
-def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict, is_gk: bool, details_list=None):
+def aggregate_stats_list(stats_list: list[dict]) -> dict | None:
+    """Aggregate a list of competition stats into combined stats dict."""
+    if not stats_list:
+        return None
+
+    total_minutes = sum(s.get("minutes_played", 0) for s in stats_list)
+    saves = sum(s.get("saves", 0) or 0 for s in stats_list)
+    ga = sum(s.get("goals_against", 0) or 0 for s in stats_list)
+    save_pct = round((saves / (saves + ga)) * 100, 1) if (saves + ga) > 0 else 0
+
+    return {
+        "matches_total": sum(s.get("matches_total", 0) for s in stats_list),
+        "minutes_played": total_minutes,
+        "matches_started": sum(s.get("matches_started", 0) for s in stats_list),
+        "goals": sum(s.get("goals", 0) for s in stats_list),
+        "assists": sum(s.get("assists", 0) for s in stats_list),
+        "rating": sum(s.get("rating", 0) for s in stats_list) / len(stats_list),
+        "g_per90": sum(s.get("goals", 0) for s in stats_list) * 90 / max(1, total_minutes),
+        "a_per90": sum(s.get("assists", 0) for s in stats_list) * 90 / max(1, total_minutes),
+        "clean_sheets": sum(s.get("clean_sheets", 0) or 0 for s in stats_list),
+        "saves": saves,
+        "goals_against": ga,
+        "save_percentage": save_pct,
+    }
+
+
+def get_cached_filter_options() -> dict:
+    """Get filter options, cached in session state to avoid duplicate API calls."""
+    if "filter_options" not in st.session_state:
+        st.session_state["filter_options"] = fetch_filter_options()
+    return st.session_state["filter_options"]
+
+
+def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | None, is_gk: bool, details_list=None):
     """Display stats column in card style - used by both Dashboard and Search tabs."""
     with col:
         # Card container with dark theme
@@ -321,8 +358,8 @@ st.sidebar.markdown("---")
 # Global filters in sidebar
 st.sidebar.subheader("Filtry")
 
-# Fetch filter options for autocomplete
-filter_options = fetch_filter_options()
+# Fetch filter options for autocomplete (cached)
+filter_options = get_cached_filter_options()
 
 # Track which filter was last changed
 def on_player_change():
@@ -417,44 +454,11 @@ with tab1:
             display_comp_stats(col1, "🏆", "Liga", "2025/26", detailed_stats.get("league_stats"), is_gk)
 
             european_list = detailed_stats.get("european_stats", [])
-            european_combined = None
-            if european_list:
-                eur_saves = sum(e.get("saves", 0) or 0 for e in european_list)
-                eur_ga = sum(e.get("goals_against", 0) or 0 for e in european_list)
-                eur_save_pct = round((eur_saves / (eur_saves + eur_ga)) * 100, 1) if (eur_saves + eur_ga) > 0 else 0
-                european_combined = {
-                    "matches_total": sum(e.get("matches_total", 0) for e in european_list),
-                    "minutes_played": sum(e.get("minutes_played", 0) for e in european_list),
-                    "matches_started": sum(e.get("matches_started", 0) for e in european_list),
-                    "goals": sum(e.get("goals", 0) for e in european_list),
-                    "assists": sum(e.get("assists", 0) for e in european_list),
-                    "rating": sum(e.get("rating", 0) for e in european_list) / len(european_list) if european_list else 0,
-                    "g_per90": sum(e.get("goals", 0) for e in european_list) * 90 / max(1, sum(e.get("minutes_played", 0) for e in european_list)),
-                    "a_per90": sum(e.get("assists", 0) for e in european_list) * 90 / max(1, sum(e.get("minutes_played", 0) for e in european_list)),
-                    "clean_sheets": sum(e.get("clean_sheets", 0) or 0 for e in european_list),
-                    "saves": eur_saves,
-                    "goals_against": eur_ga,
-                    "save_percentage": eur_save_pct,
-                }
+            european_combined = aggregate_stats_list(european_list)
             display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
 
             domestic_list = detailed_stats.get("domestic_stats", [])
-            domestic_combined = None
-            if domestic_list:
-                domestic_combined = {
-                    "matches_total": sum(d.get("matches_total", 0) for d in domestic_list),
-                    "minutes_played": sum(d.get("minutes_played", 0) for d in domestic_list),
-                    "matches_started": sum(d.get("matches_started", 0) for d in domestic_list),
-                    "goals": sum(d.get("goals", 0) for d in domestic_list),
-                    "assists": sum(d.get("assists", 0) for d in domestic_list),
-                    "rating": sum(d.get("rating", 0) for d in domestic_list) / len(domestic_list) if domestic_list else 0,
-                    "g_per90": sum(d.get("goals", 0) for d in domestic_list) * 90 / max(1, sum(d.get("minutes_played", 0) for d in domestic_list)),
-                    "a_per90": sum(d.get("assists", 0) for d in domestic_list) * 90 / max(1, sum(d.get("minutes_played", 0) for d in domestic_list)),
-                    "clean_sheets": sum(d.get("clean_sheets", 0) or 0 for d in domestic_list),
-                    "saves": sum(d.get("saves", 0) or 0 for d in domestic_list),
-                    "goals_against": sum(d.get("goals_against", 0) or 0 for d in domestic_list),
-                    "save_percentage": sum(d.get("save_percentage", 0) or 0 for d in domestic_list) / len(domestic_list) if domestic_list else 0,
-                }
+            domestic_combined = aggregate_stats_list(domestic_list)
             display_comp_stats(col3, "🏆", "Domestic Cups", "2025/26", domestic_combined, is_gk, domestic_list)
 
             total = detailed_stats.get("total")
@@ -481,125 +485,145 @@ with tab2:
     # Fetch filter options for autocomplete
     filter_options = fetch_filter_options()
 
+    # Track which filter was last changed
+    def on_name_change():
+        st.session_state["search_active_filter"] = "name"
+
+    def on_team_change():
+        st.session_state["search_active_filter"] = "team"
+
+    def on_league_change():
+        st.session_state["search_active_filter"] = "league"
+
+    # Initialize active filter
+    if "search_active_filter" not in st.session_state:
+        st.session_state["search_active_filter"] = None
+
     # Search filters with autocomplete
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         name_options = [""] + filter_options.get("names", [])
-        search_name = st.selectbox("Name", name_options, index=0, placeholder="Select or type...")
+        search_name = st.selectbox("Name", name_options, index=0, placeholder="Select or type...", on_change=on_name_change, key="search_name_select")
     with col2:
         team_options = [""] + filter_options.get("teams", [])
-        search_team = st.selectbox("Club", team_options, index=0, placeholder="Select or type...")
+        search_team = st.selectbox("Club", team_options, index=0, placeholder="Select or type...", on_change=on_team_change, key="search_team_select")
     with col3:
         league_options = [""] + filter_options.get("leagues", [])
-        search_league = st.selectbox("League", league_options, index=0, placeholder="Select or type...")
+        search_league = st.selectbox("League", league_options, index=0, placeholder="Select or type...", on_change=on_league_change, key="search_league_select")
 
-    if st.button("🔍 Search", type="primary"):
-        if search_name or search_team or search_league:
-            with st.spinner("Searching..."):
-                players = fetch_players(
-                    name=search_name if search_name else None,
-                    team=search_team if search_team else None,
-                    league=search_league if search_league else None,
-                )
+    # Use only the filter that was last changed
+    active_filter = st.session_state.get("search_active_filter")
 
-            if players:
-                st.success(f"Found {len(players)} players")
-                st.session_state["search_results"] = players
-                # Reset player selection when new search is performed
-                if "player_select" in st.session_state:
-                    del st.session_state["player_select"]
+    if active_filter == "name" and search_name:
+        search_team = None
+        search_league = None
+    elif active_filter == "team" and search_team:
+        search_name = None
+        search_league = None
+    elif active_filter == "league" and search_league:
+        search_name = None
+        search_team = None
+
+    # Auto-search when any filter is set
+    if search_name or search_team or search_league:
+        with st.spinner("Searching..."):
+            players = fetch_players(
+                name=search_name if search_name else None,
+                team=search_team if search_team else None,
+                league=search_league if search_league else None,
+            )
+
+        if players:
+            # Auto-select first player if only one result
+            if len(players) == 1:
+                selected_player = players[0]
             else:
-                st.warning("No players found matching criteria")
-                st.session_state["search_results"] = []
+                # Let user select from results
+                player_options = {}
+                for p in players:
+                    label = f"{p['name']} ({p.get('team', 'N/A')})"
+                    if p.get('position') == 'GK':
+                        label = f"🧤 {label}"
+                    player_options[label] = p
+
+                selected = st.selectbox("Select player:", options=list(player_options.keys()), key="player_select")
+                selected_player = player_options[selected]
+
+            # Season selector
+            season = st.selectbox("Season", ["2025/26", "2024/25", "2023/24"], key="stats_season")
+
+            # Fetch detailed stats
+            with st.spinner("Loading stats..."):
+                detailed_stats = fetch_player_detailed_stats(selected_player["id"], season)
+
+            if detailed_stats:
+                st.markdown("---")
+
+                # Header with GK badge if applicable
+                is_gk = detailed_stats.get("player_position") == "GK"
+                header_text = f"📊 {detailed_stats['player_name']}"
+                if is_gk:
+                    header_text += " 🧤 Goalkeeper"
+                header_text += f" - {detailed_stats['player_team']}"
+                st.subheader(header_text)
+
+                # 4 columns: League | European | Domestic | Total
+                col1, col2, col3, col4 = st.columns(4)
+
+                # Display columns
+                display_comp_stats(col1, "🏆", "League Stats", "2025/26", detailed_stats.get("league_stats"), is_gk)
+
+                european_list = detailed_stats.get("european_stats", [])
+                european_combined = None
+                if european_list:
+                    eur_saves = sum(e.get("saves", 0) or 0 for e in european_list)
+                    eur_ga = sum(e.get("goals_against", 0) or 0 for e in european_list)
+                    eur_save_pct = round((eur_saves / (eur_saves + eur_ga)) * 100, 1) if (eur_saves + eur_ga) > 0 else 0
+                    european_combined = {
+                        "matches_total": sum(e.get("matches_total", 0) for e in european_list),
+                        "minutes_played": sum(e.get("minutes_played", 0) for e in european_list),
+                        "matches_started": sum(e.get("matches_started", 0) for e in european_list),
+                        "goals": sum(e.get("goals", 0) for e in european_list),
+                        "assists": sum(e.get("assists", 0) for e in european_list),
+                        "rating": sum(e.get("rating", 0) for e in european_list) / len(european_list) if european_list else 0,
+                        "g_per90": sum(e.get("goals", 0) for e in european_list) * 90 / max(1, sum(e.get("minutes_played", 0) for e in european_list)),
+                        "a_per90": sum(e.get("assists", 0) for e in european_list) * 90 / max(1, sum(e.get("minutes_played", 0) for e in european_list)),
+                        "clean_sheets": sum(e.get("clean_sheets", 0) or 0 for e in european_list),
+                        "saves": eur_saves,
+                        "goals_against": eur_ga,
+                        "save_percentage": eur_save_pct,
+                    }
+                display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
+
+                domestic_list = detailed_stats.get("domestic_stats", [])
+                domestic_combined = None
+                if domestic_list:
+                    domestic_combined = {
+                        "matches_total": sum(d.get("matches_total", 0) for d in domestic_list),
+                        "minutes_played": sum(d.get("minutes_played", 0) for d in domestic_list),
+                        "matches_started": sum(d.get("matches_started", 0) for d in domestic_list),
+                        "goals": sum(d.get("goals", 0) for d in domestic_list),
+                        "assists": sum(d.get("assists", 0) for d in domestic_list),
+                        "rating": sum(d.get("rating", 0) for d in domestic_list) / len(domestic_list) if domestic_list else 0,
+                        "g_per90": sum(d.get("goals", 0) for d in domestic_list) * 90 / max(1, sum(d.get("minutes_played", 0) for d in domestic_list)),
+                        "a_per90": sum(d.get("assists", 0) for d in domestic_list) * 90 / max(1, sum(d.get("minutes_played", 0) for d in domestic_list)),
+                        "clean_sheets": sum(d.get("clean_sheets", 0) or 0 for d in domestic_list),
+                        "saves": sum(d.get("saves", 0) or 0 for d in domestic_list),
+                        "goals_against": sum(d.get("goals_against", 0) or 0 for d in domestic_list),
+                        "save_percentage": sum(d.get("save_percentage", 0) or 0 for d in domestic_list) / len(domestic_list) if domestic_list else 0,
+                    }
+                display_comp_stats(col3, "🏆", "Domestic Cups", "2025/26", domestic_combined, is_gk, domestic_list)
+
+                total = detailed_stats.get("total")
+                total_subtitle = "Club competitions only"
+                display_comp_stats(col4, "📊", "Season Total", total_subtitle, total, is_gk)
+
+            else:
+                st.warning(f"No stats available for season {season}")
         else:
-            st.warning("Enter at least one search criterion")
-
-    # Player selection and detailed stats display
-    if "search_results" in st.session_state and st.session_state["search_results"]:
-        players = st.session_state["search_results"]
-
-        # Build options with GK indicator
-        player_options = {}
-        for p in players:
-            label = f"{p['name']} ({p.get('team', 'N/A')})"
-            if p.get('position') == 'GK':
-                label = f"🧤 {label}"
-            player_options[label] = p
-
-        selected = st.selectbox("Select player to view details:", options=list(player_options.keys()), key="player_select")
-        selected_player = player_options[selected]
-
-        # Season selector
-        season = st.selectbox("Season", ["2025/26", "2024/25", "2023/24"], key="stats_season")
-
-        # Fetch detailed stats
-        with st.spinner("Loading stats..."):
-            detailed_stats = fetch_player_detailed_stats(selected_player["id"], season)
-
-        if detailed_stats:
-            st.markdown("---")
-
-            # Header with GK badge if applicable
-            is_gk = detailed_stats.get("player_position") == "GK"
-            header_text = f"📊 {detailed_stats['player_name']}"
-            if is_gk:
-                header_text += " 🧤 Goalkeeper"
-            header_text += f" - {detailed_stats['player_team']}"
-            st.subheader(header_text)
-
-            # 4 columns: League | European | Domestic | Total
-            col1, col2, col3, col4 = st.columns(4)
-
-            # Display columns
-            display_comp_stats(col1, "🏆", "League Stats", "2025/26", detailed_stats.get("league_stats"), is_gk)
-
-            european_list = detailed_stats.get("european_stats", [])
-            european_combined = None
-            if european_list:
-                eur_saves = sum(e.get("saves", 0) or 0 for e in european_list)
-                eur_ga = sum(e.get("goals_against", 0) or 0 for e in european_list)
-                eur_save_pct = round((eur_saves / (eur_saves + eur_ga)) * 100, 1) if (eur_saves + eur_ga) > 0 else 0
-                european_combined = {
-                    "matches_total": sum(e.get("matches_total", 0) for e in european_list),
-                    "minutes_played": sum(e.get("minutes_played", 0) for e in european_list),
-                    "matches_started": sum(e.get("matches_started", 0) for e in european_list),
-                    "goals": sum(e.get("goals", 0) for e in european_list),
-                    "assists": sum(e.get("assists", 0) for e in european_list),
-                    "rating": sum(e.get("rating", 0) for e in european_list) / len(european_list) if european_list else 0,
-                    "g_per90": sum(e.get("goals", 0) for e in european_list) * 90 / max(1, sum(e.get("minutes_played", 0) for e in european_list)),
-                    "a_per90": sum(e.get("assists", 0) for e in european_list) * 90 / max(1, sum(e.get("minutes_played", 0) for e in european_list)),
-                    "clean_sheets": sum(e.get("clean_sheets", 0) or 0 for e in european_list),
-                    "saves": eur_saves,
-                    "goals_against": eur_ga,
-                    "save_percentage": eur_save_pct,
-                }
-            display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
-
-            domestic_list = detailed_stats.get("domestic_stats", [])
-            domestic_combined = None
-            if domestic_list:
-                domestic_combined = {
-                    "matches_total": sum(d.get("matches_total", 0) for d in domestic_list),
-                    "minutes_played": sum(d.get("minutes_played", 0) for d in domestic_list),
-                    "matches_started": sum(d.get("matches_started", 0) for d in domestic_list),
-                    "goals": sum(d.get("goals", 0) for d in domestic_list),
-                    "assists": sum(d.get("assists", 0) for d in domestic_list),
-                    "rating": sum(d.get("rating", 0) for d in domestic_list) / len(domestic_list) if domestic_list else 0,
-                    "g_per90": sum(d.get("goals", 0) for d in domestic_list) * 90 / max(1, sum(d.get("minutes_played", 0) for d in domestic_list)),
-                    "a_per90": sum(d.get("assists", 0) for d in domestic_list) * 90 / max(1, sum(d.get("minutes_played", 0) for d in domestic_list)),
-                    "clean_sheets": sum(d.get("clean_sheets", 0) or 0 for d in domestic_list),
-                    "saves": sum(d.get("saves", 0) or 0 for d in domestic_list),
-                    "goals_against": sum(d.get("goals_against", 0) or 0 for d in domestic_list),
-                    "save_percentage": sum(d.get("save_percentage", 0) or 0 for d in domestic_list) / len(domestic_list) if domestic_list else 0,
-                }
-            display_comp_stats(col3, "🏆", "Domestic Cups", "2025/26", domestic_combined, is_gk, domestic_list)
-
-            total = detailed_stats.get("total")
-            total_subtitle = "Club competitions only"
-            display_comp_stats(col4, "📊", "Season Total", total_subtitle, total, is_gk)
-
-        else:
-            st.warning(f"No stats available for season {season}")
+            st.warning("No players found matching criteria")
+    else:
+        st.info("👆 Select a filter above to search")
 
 with tab3:
     st.header("⚖️ Porównywarka Piłkarzy")
@@ -642,7 +666,7 @@ with tab3:
                 st.error("❌ Nie można porównać bramkarza z graczem z pola")
             else:
                 is_gk = gk1
-                st.info(f"📅 {season_cmp} | {'🧤 Bramkarze' if is_gk else '⚽ Gracze z pola'}")
+                st.info(f"📅 {season_cmp} | {'🧤 Bramkarze' if is_gk else '⚽ Gracze z pola'} | 📊 Tylko rozgrywki ligowe")
 
                 # Stats
                 st.subheader("Wybierz statystyki")
@@ -669,27 +693,22 @@ with tab3:
                     if c6: stats.append(("Mecze", "matches_total"))
                     if c7: stats.append(("Minuty", "minutes_played"))
                 else:
-                    x1, x2, x3 = st.columns(3)
+                    x1, x2 = st.columns(2)
                     with x1:
                         c1 = st.checkbox("Gole", True)
                         c2 = st.checkbox("Asysty", True)
                         c3 = st.checkbox("G/90", True)
                         c4 = st.checkbox("A/90", True)
                     with x2:
-                        c5 = st.checkbox("Żółte kartki", False)
-                        c6 = st.checkbox("Czerwone kartki", False)
-                    with x3:
-                        c7 = st.checkbox("Mecze", True)
-                        c8 = st.checkbox("Minuty", False)
+                        c5 = st.checkbox("Mecze", True)
+                        c6 = st.checkbox("Minuty", False)
 
                     if c1: stats.append(("Gole", "goals"))
                     if c2: stats.append(("Asysty", "assists"))
                     if c3: stats.append(("G/90", "g_per90"))
                     if c4: stats.append(("A/90", "a_per90"))
-                    if c5: stats.append(("Żółte", "yellow_cards"))
-                    if c6: stats.append(("Czerwone", "red_cards"))
-                    if c7: stats.append(("Mecze", "matches_total"))
-                    if c8: stats.append(("Minuty", "minutes_played"))
+                    if c5: stats.append(("Mecze", "matches_total"))
+                    if c6: stats.append(("Minuty", "minutes_played"))
 
                 if st.button("📊 Porównaj", type="primary"):
                     if not stats:
@@ -700,8 +719,8 @@ with tab3:
                             s2 = fetch_player_detailed_stats(p2["id"], season_cmp)
 
                         if s1 and s2:
-                            t1 = s1.get("total", {})
-                            t2 = s2.get("total", {})
+                            t1 = s1.get("league_stats") or s1.get("total", {})
+                            t2 = s2.get("league_stats") or s2.get("total", {})
 
                             labels = [x[0] for x in stats]
                             keys = [x[1] for x in stats]

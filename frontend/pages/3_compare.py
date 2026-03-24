@@ -74,7 +74,7 @@ if sel1 != "-- Wybierz --" and sel2 != "-- Wybierz --":
         st.error("❌ Nie można porównać bramkarza z graczem z pola")
     else:
         is_gk = gk1
-        st.info(f"📅 {season_cmp} | {'🧤 Bramkarze' if is_gk else '⚽ Gracze z pola'}")
+        st.info(f"📅 {season_cmp} | {'🧤 Bramkarze' if is_gk else '⚽ Gracze z pola'} | 📊 Tylko rozgrywki ligowe")
 
         # Stats
         st.subheader("Wybierz statystyki")
@@ -127,8 +127,8 @@ if sel1 != "-- Wybierz --" and sel2 != "-- Wybierz --":
                     s2 = fetch_detailed_stats(p2["id"], season_cmp)
 
                 if s1 and s2:
-                    t1 = s1.get("total", {})
-                    t2 = s2.get("total", {})
+                    t1 = s1.get("league_stats") or s1.get("total", {})
+                    t2 = s2.get("league_stats") or s2.get("total", {})
 
                     labels = [x[0] for x in stats]
                     keys = [x[1] for x in stats]
