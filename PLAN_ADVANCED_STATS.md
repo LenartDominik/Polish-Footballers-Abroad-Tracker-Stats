@@ -289,6 +289,5 @@ def display_player_stats(player_id: int, season: str = "2025/26"):
 ---
 
 ## Decyzje do podjęcia
-1. **Czy przechowywać PL National Team stats?** - Na razie NIE (skupiamy się na klubach)
 2. **Czy zachować starą tabelę `player_stats`?** - TAK, jako Season Total (agregacja)
 3. **Format dat w frontend** - Uproszczony (bez dokładnej daty meczu)
