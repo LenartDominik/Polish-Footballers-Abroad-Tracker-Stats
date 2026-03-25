@@ -9,6 +9,7 @@ import sys
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
+from turtle import position
 from typing import TypedDict
 
 
@@ -96,6 +97,39 @@ POLISH_PLAYERS = {
     402419: {"name": "Przemysław Frankowski", "position": "MF"},
     765466: {"name": "Sebastian Szymański", "position": "MF"},
     891855: {"name": "Jakub Moder", "position": "MF"},
+    560109: ({"name": "Oskar Zawada", "position": "FW"}),
+    1116778: {"name": "Szymon Włodarczyk", "position": "FW"},
+    277460: {"name": "Arkadiusz Milik", "position": "FW"},
+    689987: {"name": "Jakub Piotrowski", "position": "MF"},
+    1096327: {"name": "Jakub Stolarczyk", "position": "GK"},
+    1131992: {"name": "Jakub Kałuziński", "position": "MF"},
+    488960: {"name": "Michał Helik", "position": "DF"},
+    862717: {"name": "Przemysław Płacheta", "position": "MF"},
+    178732: {"name": "Łukasz Skorupski", "position": "GK"},
+    556952: {"name": "Krystian Bielik", "position": "DF"},
+    198099: {"name": "Bartosz Bereszyński", "position": "DF"},
+    920861: {"name": "Adrian Benedyczak", "position": "FW"},
+    1154332: {"name": "Mateusz Kochalski", "position": "GK"},
+    823121: {"name": "Tymoteusz Puchacz", "position": "DF"},
+    1380468: {"name": "Jan Faberski", "position": "MF"},
+    943056: {"name": "Daniel Bielica", "position": "GK"},
+    306174: {"name": "Tomasz Kędziora", "position": "DF"},
+    361403: {"name": "Karol Linetty", "position": "MF"},
+    724909: {"name": "Radosław Majecki", "position": "GK"},
+    815981: {"name": "Konrad Michalak", "position": "FW"},
+    943059: {"name": "Cezary Miszta", "position": "GK"},
+    1484822: {"name": "Filip Rózga", "position": "MF"},
+    962113: {"name": "Łukasz Poręba", "position": "MF"},
+    1245669: {"name": "Patryk Peda", "position": "DF"},
+    1276988: {"name": "Dariusz Stalmach", "position": "MF"},
+    954190: {"name": "Michał Skóraś", "position": "MF"},
+    860592: {"name": "Sebastian Walukiewicz", "position": "DF"},
+    555646: {"name": "Mateusz Wieteska", "position": "DF"},
+    729731: {"name": "Matty Cash", "position": "DF"},
+    1229761: {"name": "Mateusz Łęgowski", "position": "MF"},
+    558136: {"name": "Karol Świderski", "position": "FW"},
+    1070709: {"name": "Filip Szymczak", "position": "FW"},
+    1116774: {"name": "Łukasz Łakomy", "position": "MF"},
 }
 
 # Teams to sync with multiple competitions
@@ -264,8 +298,219 @@ TEAMS = {
             {"name": "KNVB Cup", "league_id": 235},
             {"name": "Europa League", "league_id": 73},
         ],
+},
+    8674: {
+        "name": "FC Groningen",
+        "competitions": [
+            {"name": "Eredivisie", "league_id": 57},
+            {"name": "KNVB Cup", "league_id": 235},
+        ],
+},
+    10218: {
+        "name": "Excelsior",
+        "competitions": [
+            {"name": "Eredivisie", "league_id": 57},
+            {"name": "KNVB Cup", "league_id": 235}, 
+        ],
+    },
+    9885:
+    {
+        "name": "Juventus",
+        "competitions": [
+            {"name": "Serie A", "league_id": 55},
+            {"name": "Coppa Italia", "league_id": 141},
+            {"name": "Champions League", "league_id": 42},
+        ],
+    },
+    8197: {
+        "name": "Leicester City",
+        "competitions": [
+            {"name": "Championship", "league_id": 48},
+            {"name": "FA Cup", "league_id": 132},
+            {"name": "EFL Cup", "league_id": 133},
+        ],  
+},
+    1933: {
+        "name": "Başakşehir",
+        "competitions": [
+            {"name": "Süper Lig", "league_id": 165},
+            {"name": "Turkish Cup", "league_id": 151},
+        ],
+    },
+    8653: {
+        "name": "Oxford United",
+        "competitions": [
+            {"name": "Championship", "league_id": 48},
+            {"name": "FA Cup", "league_id": 132},
+            {"name": "EFL Cup", "league_id": 133},
+        ],
+},
+    9857: {
+        "name": "Bologna",
+        "competitions": [
+            {"name": "Serie A", "league_id": 55},
+            {"name": "Coppa Italia", "league_id": 141},
+            {"name": "Europa League", "league_id": 73},
+        ],
+
+},
+    8659: {
+        "name": "West Bromwich Albion",
+        "competitions": [
+            {"name": "Championship", "league_id": 48},
+            {"name": "FA Cup", "league_id": 132},
+            {"name": "EFL Cup", "league_id": 133},
+        ],
+    },
+    8540: {
+        "name": "Palermo",
+        "competitions": [
+            {"name": "Serie B", "league_id": 86},
+            {"name": "Coppa Italia", "league_id": 141},
+        ],
+    },
+    4685: {
+        "name": "Kasimpaşa",
+        "competitions": [
+            {"name": "Süper Lig", "league_id": 71},
+            {"name": "Turkish Cup", "league_id": 151},
+        ],
+    },
+    6413: {
+        "name": "PEC Zwolle",
+        "competitions": [
+            {"name": "Eredivisie", "league_id": 57},
+            {"name": "KNVB Cup", "league_id": 235},
+        ],
+    },
+    9761: {
+        "name": "NAC Breda",
+        "competitions": [
+            {"name": "Eredivisie", "league_id": 57},
+            {"name": "KNVB Cup", "league_id": 235},
+        ],
+    },
+    8619: {
+        "name": "PAOK Thessaloniki",
+        "competitions": [
+            {"name": "Super League 1", "league_id": 135},
+            {"name": "Greek Cup", "league_id": 145},
+            {"name": "Europa League", "league_id": 73},
+            {"name": "Europa League Qualification", "league_id": 10613},
+        ],
+    },
+    1569: {
+        "name": "Kocaelispor",
+        "competitions": [
+            {"name": "Süper Lig", "league_id": 71},
+            {"name": "Turkish Cup", "league_id": 151},
+        ],
+    },
+    8521: {
+        "name": "Brest",
+        "competitions": [
+            {"name": "Ligue 1", "league_id": 53},
+            {"name": "Coupe de France", "league_id": 134},
+        ],
+    },
+    162386: {
+        "name": "Panetolikos",
+        "competitions": [
+            {"name": "Super League 1", "league_id": 135},
+            {"name": "Greek Cup", "league_id": 145},
+        ],
+    },
+    7841 : {
+        "name": "Rio Ave",
+        "competitions": [
+            {"name": "Primeira Liga", "league_id": 61},
+            {"name": "Taça de Portugal", "league_id": 186},
+        ],
+    },
+    10014: {
+        "name": "Sturm Graz",
+        "competitions": [
+            {"name": "Bundesliga", "league_id": 38},
+            {"name": "Austrian Cup", "league_id": 278},
+            {"name": "Europa League", "league_id": 73},
+            {"name": "Europa League Qualification", "league_id": 10613},
+        ],
+},
+    8232:
+    {
+        "name": "Elversberg",
+        "competitions": [
+            {"name": "2. Bundesliga", "league_id": 146},
+            {"name": "DFB-Pokal", "league_id": 209},
+        ],
+     },
+     8188: {
+        "name": "1. FC Magdeburg",
+        "competitions": [
+            {"name": "2. Bundesliga", "league_id": 146},
+            {"name": "DFB-Pokal", "league_id": 209},
+        ],
+},
+    9991: {
+        "name": "Gent",
+        "competitions": [
+            {"name": "First Division A", "league_id": 40},
+            {"name": "Belgian Cup", "league_id": 149},
+        ],
+    },
+    7943: {
+        "name": "Sassuolo",
+        "competitions": [
+            {"name": "Serie A", "league_id": 55},
+            {"name": "Coppa Italia", "league_id": 141},
+        ]
+    },
+    10252: {
+        "name": "Aston Villa",
+        "competitions": [
+            {"name": "Premier League", "league_id": 47},
+            {"name": "FA Cup", "league_id": 132},
+            {"name": "EFL Cup", "league_id": 133},
+            {"name": "Europa League", "league_id": 73},
+        ],
+},
+    4681: {
+        "name": "Eyüpspor",
+        "competitions": [
+            {"name": "Süper Lig", "league_id": 71},
+            {"name": "Turkish Cup", "league_id": 151},
+        ],
+},
+    10200: {    
+        "name": "Panathinaikos",
+        "competitions": [
+            {"name": "Super League 1", "league_id": 135},
+            {"name": "Greek Cup", "league_id": 145},
+            {"name": "Europa League", "league_id": 73},
+            {"name": "Europa League Qualification", "league_id": 10613},
+            {"name": "Champions League", "league_id": 42},
+            {"name": "Champions League Qualification", "league_id": 10611},
+        ],
+},
+    9986: {
+        "name": "Sporting Charleroi",
+        "competitions": [
+            {"name": "First Division A", "league_id": 40},
+            {"name": "Belgian Cup", "league_id": 149},
+        ],
+    },
+    1773: {
+        "name": "OH Leuven",
+        "competitions": [
+            {"name": "First Division A", "league_id": 40},
+            {"name": "Belgian Cup", "league_id": 149},
+        ],
+    },
 }
-}
+
+
+
+
 
 
 CURRENT_SEASON = "2025/26"
@@ -327,7 +572,7 @@ PLAYER_TEAMS = {
     1067260: 8722, # Jakub Kamiński - 1. FC Köln
     1800401: 9905, # Kacper Potulski - Mainz 05
     361712: 8152,  # Adam Dźwigała - St. Pauli
-    1112702: 8152,  # Arkadiusz Pyrka - St. Pauli
+    1112702: 8152, # Arkadiusz Pyrka - St. Pauli
     502543: 8177,  # Dawid Kownacki - Hertha BSC
     1053713: 9904, # Maik Nawrocki - Hannover 96
     1065940: 8177, # Michał Karbownik - Hertha BSC
@@ -335,6 +580,37 @@ PLAYER_TEAMS = {
     402419: 9851,  # Przemysław Frankowski - Rennes
     765466: 9851,  # Sebastian Szymański - Rennes
     891855: 10235, # Jakub Moder - Feyenoord
+    560109: 8674,  # Oskar Zawada - FC Groningen
+    1116778: 10218, # Szymon Włodarczyk - Excelsior
+    277460: 9885,  # Arkadiusz Milik - Juventus
+    689987: 8600,  # Jakub Piotrowski - Udinese
+    1096327: 8197, # Jakub Stolarczyk - Leicester City
+    1131992: 1933, # Jakub Kałuziński - Başakşehir
+    488960: 8653,  # Michał Helik - Oxford United
+    862717: 8653,  # Przemysław Płacheta - Oxford United
+    178732: 9857,  # Łukasz Skorupski - Bologna
+    556952: 8659,  # Krystian Bielik - West Bromwich Albion
+    198099: 8540,  # Bartosz Bereszyński - Palermo
+    920861: 4685,  # Adrian Benedyczak - Kasımpaşa
+    1380468: 6413, # Jan Faberski - PEC Zwolle
+    943056: 9761,  # Daniel Bielica - NAC Breda
+    306174: 8619,  # Tomasz Kędziora - PAOK Thessaloniki
+    361403: 1569,  # Karol Linetty - Kocaelispor
+    724909: 8521,  # Radosław Majecki - Brest
+    815981: 162386, # Konrad Michalak - Panetolikos
+    943059: 7841,  # Cezary Miszta - Rio Ave
+    1484822: 10014, # Filip Rózga - Sturm Graz
+    962113: 8232,  # Łukasz Poręba - Elversberg
+    1245669: 8540, # Patryk Peda - Palermo
+    1276988: 8188, # Dariusz Stalmach - Magdeburg    
+    954190: 9991,  # Michał Skóraś - Gent
+    860592: 7943,  # Sebastian Walukiewicz - Sassuolo
+    555646: 1569,  # Mateusz Wieteska - Kocaelispor
+    729731: 10252, # Matty Cash - Aston Villa
+    1229761: 4681, # Mateusz Łęgowski - Eyüpspor
+    558136: 10200, # Karol Świderski - Panathinaikos
+    1070709: 9986, # Filip Szymczak - Sporting Charleroi
+    1116774: 1773, # Łukasz Łakomy - OH Leuven
 }
 
 
