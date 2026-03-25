@@ -12,10 +12,16 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
 
-st.title("📊 Dashboard")
+st.markdown("""
+<div style="text-align: center;">
+    <h1>🇵🇱 Polish Footballers Abroad</h1>
+    <p style="font-size: 1.2rem; color: #888;">Track Polish footballers in the best leagues worldwide!</p>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("---")
 
 # Season selector
-season = st.selectbox("Sezon", ["2025/26", "2024/25", "2023/24"], index=0)
+season = st.selectbox("Season", ["2025/26", "2024/25", "2023/24"], index=0)
 
 # Fetch top players
 @st.cache_data(ttl=300)
@@ -38,25 +44,25 @@ if data:
     # KPIs
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Piłkarzy w bazie", len(df))
+        st.metric("Players in DB", len(df))
     with col2:
-        st.metric("Łącznie goli", df["goals"].sum() if "goals" in df else 0)
+        st.metric("Total Goals", df["goals"].sum() if "goals" in df else 0)
     with col3:
-        st.metric("Średnie xG/90", f"{df['xg_per90'].mean():.2f}" if "xg_per90" in df else "N/A")
+        st.metric("Avg xG/90", f"{df['xg_per90'].mean():.2f}" if "xg_per90" in df else "N/A")
     with col4:
-        st.metric("Łącznie asyst", df["assists"].sum() if "assists" in df else 0)
+        st.metric("Total Assists", df["assists"].sum() if "assists" in df else 0)
 
     st.markdown("---")
 
     # Charts
-    tab1, tab2, tab3 = st.tabs(["Gole", "xG/90", "Asysty"])
+    tab1, tab2, tab3 = st.tabs(["Goals", "xG/90", "Assists"])
 
     with tab1:
         fig = px.bar(
             df.nlargest(15, "goals") if "goals" in df else df,
             x="player_name",
             y="goals",
-            title="Top 15 strzelców",
+            title="Top 15 Scorers",
             color="goals",
             color_continuous_scale="Reds",
         )
@@ -68,8 +74,8 @@ if data:
             x="xg_per90",
             y="goals",
             hover_data=["player_name"],
-            title="xG/90 vs Gole (min 500 minut)",
-            labels={"xg_per90": "xG/90", "goals": "Gole"},
+            title="xG/90 vs Goals (min 500 minutes)",
+            labels={"xg_per90": "xG/90", "goals": "Goals"},
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -78,11 +84,11 @@ if data:
             df.nlargest(15, "assists") if "assists" in df else df,
             x="player_name",
             y="assists",
-            title="Top 15 asystentów",
+            title="Top 15 Assist Providers",
             color="assists",
             color_continuous_scale="Greens",
         )
         st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.info("Brak danych - uruchom backend i sprawdź połączenie z API")
+    st.info("No data - start backend and check API connection")

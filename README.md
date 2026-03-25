@@ -1,6 +1,6 @@
 # Polish Footballers Abroad Tracker
 
-Komercyjna aplikacja freemium do śledzenia polskich piłkarzy grających za granicą z bogatymi statystykami.
+Komercyjna aplikacja freemium do śledzenia około 60 polskich piłkarzy grających za granicą z bogatymi statystykami.
 
 ## Funkcje
 

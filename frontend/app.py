@@ -14,7 +14,7 @@ load_dotenv()
 # Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 st.set_page_config(
-    page_title="Polscy Piłkarze za Granicą",
+    page_title="Polish Footballers Abroad",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -349,14 +349,30 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
         st.markdown("</div>", unsafe_allow_html=True)
 
 
+def get_position_display(position: str | None) -> str:
+    """Return position with emoji."""
+    if position == "GK":
+        return "🧤 Goalkeeper"
+    elif position in ["F", "FW", "Forward", "ST", "CF"]:
+        return "⚽ Forward"
+    elif position in ["M", "MF", "Midfielder"]:
+        return "⚽ Midfielder"
+    elif position in ["D", "DF", "Defender"]:
+        return "⚽ Defender"
+    elif position:
+        return f"⚽ {position}"
+    else:
+        return "⚽ Unknown"
+
+
 # ============================================
 # SIDEBAR
 # ============================================
-st.sidebar.title("⚽ Polacy za Granicą")
+st.sidebar.title("⚽ Polish Players Abroad")
 st.sidebar.markdown("---")
 
 # Global filters in sidebar
-st.sidebar.subheader("Filtry")
+st.sidebar.subheader("Filters")
 
 # Fetch filter options for autocomplete (cached)
 filter_options = get_cached_filter_options()
@@ -374,41 +390,45 @@ if "active_filter" not in st.session_state:
 
 # Player search with autocomplete
 player_names = [""] + filter_options.get("names", [])
-player_query = st.sidebar.selectbox("🔍 Szukaj piłkarza", player_names, index=0, placeholder="Wpisz lub wybierz...", on_change=on_player_change)
+player_query = st.sidebar.selectbox("🔍 Search Player", player_names, index=0, placeholder="Type or select...", on_change=on_player_change)
 
 # Club filter - clubs where Polish players play + option to type any club
-club_options = ["Wszystkie"] + filter_options.get("teams", [])
-club_filter = st.sidebar.selectbox("🏟️ Klub", club_options, index=0, placeholder="Wpisz lub wybierz...", on_change=on_club_change)
+club_options = ["All"] + filter_options.get("teams", [])
+club_filter = st.sidebar.selectbox("🏟️ Club", club_options, index=0, placeholder="Type or select...", on_change=on_club_change)
 
 # ============================================
 # MAIN CONTENT
 # ============================================
-st.title("🇵🇱 Polscy Piłkarze za Granicą")
-st.markdown("Śledź polskich piłkarzy w najlepszych ligach świata!")
+st.markdown("""
+<div style="text-align: center;">
+    <h1>🇵🇱 Polish Footballers Abroad</h1>
+    <p style="font-size: 1.2rem; color: #888;">Track Polish footballers in the best leagues worldwide!</p>
+</div>
+""", unsafe_allow_html=True)
 
 # Tabs
-tab1, tab2, tab3 = st.tabs(["🏆 Dashboard", "🔍 Szukaj", "⚖️ Porównaj"])
+tab1, tab2, tab3 = st.tabs(["🏆 Dashboard", "🔍 Search", "⚖️ Compare"])
 
 with tab1:
     # Filters are MUTUALLY EXCLUSIVE - use whichever was last changed
     search_name = player_query if player_query else None
-    search_club = club_filter if club_filter and club_filter != "Wszystkie" else None
+    search_club = club_filter if club_filter and club_filter != "All" else None
     active_filter = st.session_state.get("active_filter")
 
     # Use the filter that was last changed
     if active_filter == "player" and search_name:
-        with st.spinner(f"Szukam '{search_name}'..."):
+        with st.spinner(f"Searching for '{search_name}'..."):
             players = fetch_players(name=search_name, limit=10)
     elif active_filter == "club" and search_club:
-        with st.spinner(f"Wczytuję piłkarzy z '{search_club}'..."):
+        with st.spinner(f"Loading players from '{search_club}'..."):
             players = fetch_players(team=search_club, limit=20)
     elif search_name:
         # Default to player if only player is set
-        with st.spinner(f"Szukam '{search_name}'..."):
+        with st.spinner(f"Searching for '{search_name}'..."):
             players = fetch_players(name=search_name, limit=10)
     elif search_club:
         # Default to club if only club is set
-        with st.spinner(f"Wczytuję piłkarzy z '{search_club}'..."):
+        with st.spinner(f"Loading players from '{search_club}'..."):
             players = fetch_players(team=search_club, limit=20)
     else:
         players = []
@@ -421,19 +441,18 @@ with tab1:
             # Let user select from results
             player_options = {}
             for p in players:
-                label = f"{p['name']} ({p.get('team', 'N/A')})"
-                if p.get('position') == 'GK':
-                    label = f"🧤 {label}"
+                pos_display = get_position_display(p.get('position'))
+                label = f"{p['name']} - {p.get('team', 'N/A')} ({pos_display})"
                 player_options[label] = p
 
-            selected = st.selectbox("Wybierz piłkarza:", options=list(player_options.keys()), key="dashboard_player_select")
+            selected = st.selectbox("Select player:", options=list(player_options.keys()), key="dashboard_player_select")
             selected_player = player_options[selected]
 
         # Season selector
-        season = st.selectbox("Sezon", ["2025/26", "2024/25", "2023/24"], key="dashboard_season")
+        season = st.selectbox("Season", ["2025/26", "2024/25", "2023/24"], key="dashboard_season")
 
         # Fetch and display detailed stats
-        with st.spinner("Wczytuję statystyki..."):
+        with st.spinner("Loading stats..."):
             detailed_stats = fetch_player_detailed_stats(selected_player["id"], season)
 
         if detailed_stats:
@@ -443,7 +462,7 @@ with tab1:
             is_gk = detailed_stats.get("player_position") == "GK"
             header_text = f"📊 {detailed_stats['player_name']}"
             if is_gk:
-                header_text += " 🧤 Bramkarz"
+                header_text += " 🧤 Goalkeeper"
             header_text += f" - {detailed_stats['player_team']}"
             st.subheader(header_text)
 
@@ -451,7 +470,7 @@ with tab1:
             col1, col2, col3, col4 = st.columns(4)
 
             # Reuse display function from Search tab
-            display_comp_stats(col1, "🏆", "Liga", "2025/26", detailed_stats.get("league_stats"), is_gk)
+            display_comp_stats(col1, "🏆", "League", "2025/26", detailed_stats.get("league_stats"), is_gk)
 
             european_list = detailed_stats.get("european_stats", [])
             european_combined = aggregate_stats_list(european_list)
@@ -541,9 +560,8 @@ with tab2:
                 # Let user select from results
                 player_options = {}
                 for p in players:
-                    label = f"{p['name']} ({p.get('team', 'N/A')})"
-                    if p.get('position') == 'GK':
-                        label = f"🧤 {label}"
+                    pos_display = get_position_display(p.get('position'))
+                    label = f"{p['name']} - {p.get('team', 'N/A')} ({pos_display})"
                     player_options[label] = p
 
                 selected = st.selectbox("Select player:", options=list(player_options.keys()), key="player_select")
@@ -626,36 +644,36 @@ with tab2:
         st.info("👆 Select a filter above to search")
 
 with tab3:
-    st.header("⚖️ Porównywarka Piłkarzy")
+    st.header("⚖️ Player Comparison")
 
-    # Pobierz wszystkich graczy
+    # Fetch all players
     all_players = fetch_players(limit=100)
 
     if not all_players:
-        st.error("⚠️ Backend nie działa! Uruchom: `cd backend && uv run uvicorn app.main:app --reload --port 8000`")
+        st.error("⚠️ Backend not running! Start: `cd backend && uv run uvicorn app.main:app --reload --port 8000`")
     else:
-        # Stwórz listę opcji: "Nazwa (Pozycja) - Klub"
+        # Create options list with position display
         player_options = {}
         for p in all_players:
-            pos = p.get("position", "?")
-            team = p.get("team", "?")
-            label = f"{p['name']} ({pos}) - {team}"
+            team = p.get("team", "N/A")
+            pos_display = get_position_display(p.get("position"))
+            label = f"{p['name']} - {team} ({pos_display})"
             player_options[label] = p
 
-        option_list = ["-- Wybierz --"] + list(player_options.keys())
+        option_list = ["-- Select --"] + list(player_options.keys())
 
         col1, col2 = st.columns(2)
 
         with col1:
-            sel1 = st.selectbox("Piłkarz 1", option_list, key="compare_p1_final")
+            sel1 = st.selectbox("Player 1", option_list, key="compare_p1_final")
 
         with col2:
-            sel2 = st.selectbox("Piłkarz 2", option_list, key="compare_p2_final")
+            sel2 = st.selectbox("Player 2", option_list, key="compare_p2_final")
 
-        season_cmp = st.selectbox("Sezon", ["2025/26", "2024/25"], key="compare_season_final")
+        season_cmp = st.selectbox("Season", ["2025/26", "2024/25"], key="compare_season_final")
 
-        # Sprawdź czy wybrano graczy
-        if sel1 != "-- Wybierz --" and sel2 != "-- Wybierz --":
+        # Check if players are selected
+        if sel1 != "-- Select --" and sel2 != "-- Select --":
             p1 = player_options[sel1]
             p2 = player_options[sel2]
 
@@ -663,13 +681,13 @@ with tab3:
             gk2 = p2.get("position") == "GK"
 
             if gk1 != gk2:
-                st.error("❌ Nie można porównać bramkarza z graczem z pola")
+                st.error("❌ Cannot compare goalkeeper with field player")
             else:
                 is_gk = gk1
-                st.info(f"📅 {season_cmp} | {'🧤 Bramkarze' if is_gk else '⚽ Gracze z pola'} | 📊 Tylko rozgrywki ligowe")
+                st.info(f"📅 {season_cmp} | {'🧤 Goalkeepers' if is_gk else '⚽ Field Players'} | 📊 League games only")
 
                 # Stats
-                st.subheader("Wybierz statystyki")
+                st.subheader("Select stats")
                 stats = []
 
                 if is_gk:
@@ -682,39 +700,39 @@ with tab3:
                         c4 = st.checkbox("Goals Against", True)
                         c5 = st.checkbox("Penalties Saved", True)
                     with x3:
-                        c6 = st.checkbox("Mecze", True)
-                        c7 = st.checkbox("Minuty", True)
+                        c6 = st.checkbox("Matches", True)
+                        c7 = st.checkbox("Minutes", True)
 
                     if c1: stats.append(("Saves", "saves"))
                     if c2: stats.append(("Save %", "save_percentage"))
                     if c3: stats.append(("Clean Sheets", "clean_sheets"))
                     if c4: stats.append(("Goals Against", "goals_against"))
                     if c5: stats.append(("Penalties Saved", "penalties_saved"))
-                    if c6: stats.append(("Mecze", "matches_total"))
-                    if c7: stats.append(("Minuty", "minutes_played"))
+                    if c6: stats.append(("Matches", "matches_total"))
+                    if c7: stats.append(("Minutes", "minutes_played"))
                 else:
                     x1, x2 = st.columns(2)
                     with x1:
-                        c1 = st.checkbox("Gole", True)
-                        c2 = st.checkbox("Asysty", True)
+                        c1 = st.checkbox("Goals", True)
+                        c2 = st.checkbox("Assists", True)
                         c3 = st.checkbox("G/90", True)
                         c4 = st.checkbox("A/90", True)
                     with x2:
-                        c5 = st.checkbox("Mecze", True)
-                        c6 = st.checkbox("Minuty", False)
+                        c5 = st.checkbox("Matches", True)
+                        c6 = st.checkbox("Minutes", False)
 
-                    if c1: stats.append(("Gole", "goals"))
-                    if c2: stats.append(("Asysty", "assists"))
+                    if c1: stats.append(("Goals", "goals"))
+                    if c2: stats.append(("Assists", "assists"))
                     if c3: stats.append(("G/90", "g_per90"))
                     if c4: stats.append(("A/90", "a_per90"))
-                    if c5: stats.append(("Mecze", "matches_total"))
-                    if c6: stats.append(("Minuty", "minutes_played"))
+                    if c5: stats.append(("Matches", "matches_total"))
+                    if c6: stats.append(("Minutes", "minutes_played"))
 
-                if st.button("📊 Porównaj", type="primary"):
+                if st.button("📊 Compare", type="primary"):
                     if not stats:
-                        st.warning("Wybierz statystyki")
+                        st.warning("Select stats")
                     else:
-                        with st.spinner("Ładuję..."):
+                        with st.spinner("Loading..."):
                             s1 = fetch_player_detailed_stats(p1["id"], season_cmp)
                             s2 = fetch_player_detailed_stats(p2["id"], season_cmp)
 
@@ -755,11 +773,11 @@ with tab3:
                             st.plotly_chart(fig2, use_container_width=True)
 
                             # Table
-                            st.dataframe({"Statystyka": labels, p1['name']: v1, p2['name']: v2}, hide_index=True)
+                            st.dataframe({"Stat": labels, p1['name']: v1, p2['name']: v2}, hide_index=True)
                         else:
-                            st.warning("Brak danych")
+                            st.warning("No data")
         else:
-            st.info("👆 Wybierz dwóch graczy z list powyżej")
+            st.info("👆 Select two players from the lists above")
 
 # ============================================
 # LEGEND

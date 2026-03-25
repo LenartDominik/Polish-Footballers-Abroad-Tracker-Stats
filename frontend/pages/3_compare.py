@@ -7,9 +7,33 @@ import requests
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
-st.set_page_config(page_title="Porównaj", page_icon="⚖️", layout="wide")
 
-st.title("⚖️ Porównywarka Piłkarzy")
+def get_position_display(position: str | None) -> str:
+    """Return position with emoji."""
+    if position == "GK":
+        return "🧤 Goalkeeper"
+    elif position in ["F", "FW", "Forward", "ST", "CF"]:
+        return "⚽ Forward"
+    elif position in ["M", "MF", "Midfielder"]:
+        return "⚽ Midfielder"
+    elif position in ["D", "DF", "Defender"]:
+        return "⚽ Defender"
+    elif position:
+        return f"⚽ {position}"
+    else:
+        return "⚽ Unknown"
+
+
+st.set_page_config(page_title="Compare", page_icon="⚖️", layout="wide")
+
+st.markdown("""
+<div style="text-align: center;">
+    <h1>🇵🇱 Polish Footballers Abroad</h1>
+    <p style="font-size: 1.2rem; color: #888;">Track Polish footballers in the best leagues worldwide!</p>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("---")
+st.subheader("⚖️ Player Comparison")
 
 
 def fetch_players(name=None, limit=100):
@@ -35,35 +59,35 @@ def fetch_detailed_stats(player_id, season):
         return None
 
 
-# Pobierz wszystkich graczy
+# Fetch all players
 all_players = fetch_players(limit=100)
 
 if not all_players:
-    st.error("⚠️ Backend nie działa! Uruchom: `cd backend && uv run uvicorn app.main:app --reload --port 8000`")
+    st.error("⚠️ Backend not running! Start: `cd backend && uv run uvicorn app.main:app --reload --port 8000`")
     st.stop()
 
-# Stwórz listę opcji
+# Create options list with position display
 player_options = {}
 for p in all_players:
-    pos = p.get("position", "?")
-    team = p.get("team", "?")
-    label = f"{p['name']} ({pos}) - {team}"
+    team = p.get("team", "N/A")
+    pos_display = get_position_display(p.get("position"))
+    label = f"{p['name']} - {team} ({pos_display})"
     player_options[label] = p
 
-option_list = ["-- Wybierz --"] + list(player_options.keys())
+option_list = ["-- Select --"] + list(player_options.keys())
 
 col1, col2 = st.columns(2)
 
 with col1:
-    sel1 = st.selectbox("Piłkarz 1", option_list, key="cmp_p1")
+    sel1 = st.selectbox("Player 1", option_list, key="cmp_p1")
 
 with col2:
-    sel2 = st.selectbox("Piłkarz 2", option_list, key="cmp_p2")
+    sel2 = st.selectbox("Player 2", option_list, key="cmp_p2")
 
-season_cmp = st.selectbox("Sezon", ["2025/26", "2024/25"], key="cmp_season")
+season_cmp = st.selectbox("Season", ["2025/26", "2024/25"], key="cmp_season")
 
-# Sprawdź czy wybrano graczy
-if sel1 != "-- Wybierz --" and sel2 != "-- Wybierz --":
+# Check if players are selected
+if sel1 != "-- Select --" and sel2 != "-- Select --":
     p1 = player_options[sel1]
     p2 = player_options[sel2]
 
@@ -71,13 +95,13 @@ if sel1 != "-- Wybierz --" and sel2 != "-- Wybierz --":
     gk2 = p2.get("position") == "GK"
 
     if gk1 != gk2:
-        st.error("❌ Nie można porównać bramkarza z graczem z pola")
+        st.error("❌ Cannot compare goalkeeper with field player")
     else:
         is_gk = gk1
-        st.info(f"📅 {season_cmp} | {'🧤 Bramkarze' if is_gk else '⚽ Gracze z pola'} | 📊 Tylko rozgrywki ligowe")
+        st.info(f"📅 {season_cmp} | {'🧤 Goalkeepers' if is_gk else '⚽ Field Players'} | 📊 League games only")
 
         # Stats
-        st.subheader("Wybierz statystyki")
+        st.subheader("Select stats")
         stats = []
 
         if is_gk:
@@ -90,39 +114,39 @@ if sel1 != "-- Wybierz --" and sel2 != "-- Wybierz --":
                 c4 = st.checkbox("Goals Against", True)
                 c5 = st.checkbox("Penalties Saved", True)
             with x3:
-                c6 = st.checkbox("Mecze", True)
-                c7 = st.checkbox("Minuty", True)
+                c6 = st.checkbox("Matches", True)
+                c7 = st.checkbox("Minutes", True)
 
             if c1: stats.append(("Saves", "saves"))
             if c2: stats.append(("Save %", "save_percentage"))
             if c3: stats.append(("Clean Sheets", "clean_sheets"))
             if c4: stats.append(("Goals Against", "goals_against"))
             if c5: stats.append(("Penalties Saved", "penalties_saved"))
-            if c6: stats.append(("Mecze", "matches_total"))
-            if c7: stats.append(("Minuty", "minutes_played"))
+            if c6: stats.append(("Matches", "matches_total"))
+            if c7: stats.append(("Minutes", "minutes_played"))
         else:
             x1, x2 = st.columns(2)
             with x1:
-                c1 = st.checkbox("Gole", True)
-                c2 = st.checkbox("Asysty", True)
+                c1 = st.checkbox("Goals", True)
+                c2 = st.checkbox("Assists", True)
                 c3 = st.checkbox("G/90", True)
                 c4 = st.checkbox("A/90", True)
             with x2:
-                c5 = st.checkbox("Mecze", True)
-                c6 = st.checkbox("Minuty", False)
+                c5 = st.checkbox("Matches", True)
+                c6 = st.checkbox("Minutes", False)
 
-            if c1: stats.append(("Gole", "goals"))
-            if c2: stats.append(("Asysty", "assists"))
+            if c1: stats.append(("Goals", "goals"))
+            if c2: stats.append(("Assists", "assists"))
             if c3: stats.append(("G/90", "g_per90"))
             if c4: stats.append(("A/90", "a_per90"))
-            if c5: stats.append(("Mecze", "matches_total"))
-            if c6: stats.append(("Minuty", "minutes_played"))
+            if c5: stats.append(("Matches", "matches_total"))
+            if c6: stats.append(("Minutes", "minutes_played"))
 
-        if st.button("📊 Porównaj", type="primary"):
+        if st.button("📊 Compare", type="primary"):
             if not stats:
-                st.warning("Wybierz statystyki")
+                st.warning("Select stats")
             else:
-                with st.spinner("Ładuję..."):
+                with st.spinner("Loading..."):
                     s1 = fetch_detailed_stats(p1["id"], season_cmp)
                     s2 = fetch_detailed_stats(p2["id"], season_cmp)
 
@@ -137,7 +161,7 @@ if sel1 != "-- Wybierz --" and sel2 != "-- Wybierz --":
 
                     st.markdown(f"### {p1['name']} vs {p2['name']}")
 
-                    # Radar - normalizacja
+                    # Radar - normalization
                     n1, n2 = [], []
                     for i, (a, b) in enumerate(zip(v1, v2)):
                         mx = max(a, b) if max(a, b) > 0 else 1
@@ -180,8 +204,8 @@ if sel1 != "-- Wybierz --" and sel2 != "-- Wybierz --":
                     st.plotly_chart(fig2, use_container_width=True)
 
                     # Table
-                    st.dataframe({"Statystyka": labels, p1['name']: v1, p2['name']: v2}, hide_index=True)
+                    st.dataframe({"Stat": labels, p1['name']: v1, p2['name']: v2}, hide_index=True)
                 else:
-                    st.warning("Brak danych")
+                    st.warning("No data")
 else:
-    st.info("👆 Wybierz dwóch graczy z list powyżej")
+    st.info("👆 Select two players from the lists above")

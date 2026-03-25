@@ -8,26 +8,50 @@ import requests
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
-st.set_page_config(page_title="Wyszukiwarka", page_icon="🔍", layout="wide")
 
-st.title("🔍 Wyszukiwarka piłkarzy")
+def get_position_display(position: str | None) -> str:
+    """Return position with emoji."""
+    if position == "GK":
+        return "🧤 Goalkeeper"
+    elif position in ["F", "FW", "Forward", "ST", "CF"]:
+        return "⚽ Forward"
+    elif position in ["M", "MF", "Midfielder"]:
+        return "⚽ Midfielder"
+    elif position in ["D", "DF", "Defender"]:
+        return "⚽ Defender"
+    elif position:
+        return f"⚽ {position}"
+    else:
+        return "⚽ Unknown"
+
+
+st.set_page_config(page_title="Search", page_icon="🔍", layout="wide")
+
+st.markdown("""
+<div style="text-align: center;">
+    <h1>🇵🇱 Polish Footballers Abroad</h1>
+    <p style="font-size: 1.2rem; color: #888;">Track Polish footballers in the best leagues worldwide!</p>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("---")
+st.subheader("🔍 Player Search")
 
 # Search form
 col1, col2, col3 = st.columns([2, 2, 2])
 with col1:
-    name = st.text_input("Nazwisko", placeholder="np. Lewandowski, Szczęsny...")
+    name = st.text_input("Name", placeholder="e.g. Lewandowski, Szczesny...")
 with col2:
-    team = st.text_input("Klub", placeholder="np. Barcelona, Juventus...")
+    team = st.text_input("Club", placeholder="e.g. Barcelona, Juventus...")
 with col3:
-    league = st.text_input("Liga", placeholder="np. La Liga, Serie A...")
+    league = st.text_input("League", placeholder="e.g. La Liga, Serie A...")
 
-limit = st.slider("Maksymalna liczba wyników", 5, 100, 20)
+limit = st.slider("Max results", 5, 100, 20)
 
-if st.button("🔍 Szukaj", type="primary"):
+if st.button("🔍 Search", type="primary"):
     if not any([name, team, league]):
-        st.warning("Wprowadź przynajmniej jedno kryterium wyszukiwania")
+        st.warning("Enter at least one search criteria")
     else:
-        with st.spinner("Wyszukuję..."):
+        with st.spinner("Searching..."):
             try:
                 params = {"limit": limit}
                 if name:
@@ -42,19 +66,14 @@ if st.button("🔍 Szukaj", type="primary"):
                 players = response.json()
 
                 if players:
-                    st.success(f"Znaleziono {len(players)} piłkarzy")
+                    st.success(f"Found {len(players)} players")
 
-                    df = pd.DataFrame(players)
-
-                    # Display options
-                    display_cols = [c for c in ["name", "position", "team", "league"] if c in df.columns]
-                    st.dataframe(df[display_cols], use_container_width=True)
-
-                    # Player details on click
-                    if len(players) == 1:
-                        st.json(players[0])
+                    # Display with position
+                    for p in players:
+                        pos_display = get_position_display(p.get("position"))
+                        st.markdown(f"**{p['name']}** - {p.get('team', 'N/A')} ({pos_display})")
                 else:
-                    st.info("Nie znaleziono piłkarzy spełniających podane kryteria")
+                    st.info("No players found matching criteria")
 
             except requests.RequestException as e:
-                st.error(f"Błąd połączenia z API: {e}")
+                st.error(f"API connection error: {e}")
