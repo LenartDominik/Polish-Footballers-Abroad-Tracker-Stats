@@ -333,7 +333,7 @@ TEAMS = {
     1933: {
         "name": "Başakşehir",
         "competitions": [
-            {"name": "Süper Lig", "league_id": 165},
+            {"name": "Süper Lig", "league_id": 71},
             {"name": "Turkish Cup", "league_id": 151},
         ],
     },
