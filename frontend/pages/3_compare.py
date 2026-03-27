@@ -24,6 +24,16 @@ def get_position_display(position: str | None) -> str:
         return "⚽ Unknown"
 
 
+def clean_team_name(team: str | None) -> str:
+    """Clean team name - remove duplicate player name if present."""
+    if not team:
+        return "N/A"
+    # If team contains " - ", take only the part after it
+    if " - " in team:
+        return team.split(" - ", 1)[1]
+    return team
+
+
 st.set_page_config(page_title="Compare", page_icon="⚖️", layout="wide")
 
 st.markdown("""
@@ -33,7 +43,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 st.markdown("---")
-st.subheader("⚖️ Player Comparison")
+st.markdown('<h2 style="text-align: center;">⚖️ Player Comparison</h2>', unsafe_allow_html=True)
 
 
 def fetch_players(name=None, limit=100):
@@ -69,7 +79,7 @@ if not all_players:
 # Create options list with position display
 player_options = {}
 for p in all_players:
-    team = p.get("team", "N/A")
+    team = clean_team_name(p.get("team"))
     pos_display = get_position_display(p.get("position"))
     label = f"{p['name']} - {team} ({pos_display})"
     player_options[label] = p
@@ -84,19 +94,25 @@ with col1:
 with col2:
     sel2 = st.selectbox("Player 2", option_list, key="cmp_p2")
 
-season_cmp = st.selectbox("Season", ["2025/26", "2024/25"], key="cmp_season")
+# Season hardcoded to current
+season_cmp = "2025/26"
 
 # Check if players are selected
 if sel1 != "-- Select --" and sel2 != "-- Select --":
     p1 = player_options[sel1]
     p2 = player_options[sel2]
 
-    gk1 = p1.get("position") == "GK"
-    gk2 = p2.get("position") == "GK"
-
-    if gk1 != gk2:
+    # Check if same player
+    if p1['id'] == p2['id']:
+        st.error("❌ Cannot compare a player with themselves. Select two different players.")
+    elif p1.get("position") != p2.get("position") and (p1.get("position") == "GK" or p2.get("position") == "GK"):
+        gk1 = p1.get("position") == "GK"
+        gk2 = p2.get("position") == "GK"
         st.error("❌ Cannot compare goalkeeper with field player")
     else:
+        gk1 = p1.get("position") == "GK"
+        gk2 = p2.get("position") == "GK"
+        is_gk = gk1
         is_gk = gk1
         st.info(f"📅 {season_cmp} | {'🧤 Goalkeepers' if is_gk else '⚽ Field Players'} | 📊 League games only")
 

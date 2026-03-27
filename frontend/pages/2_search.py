@@ -25,6 +25,16 @@ def get_position_display(position: str | None) -> str:
         return "⚽ Unknown"
 
 
+def clean_team_name(team: str | None) -> str:
+    """Clean team name - remove duplicate player name if present."""
+    if not team:
+        return "N/A"
+    # If team contains " - ", take only the part after it
+    if " - " in team:
+        return team.split(" - ", 1)[1]
+    return team
+
+
 st.set_page_config(page_title="Search", page_icon="🔍", layout="wide")
 
 st.markdown("""
@@ -34,21 +44,19 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 st.markdown("---")
-st.subheader("🔍 Player Search")
+st.markdown('<h2 style="text-align: center;">🔍 Player Search</h2>', unsafe_allow_html=True)
 
 # Search form
-col1, col2, col3 = st.columns([2, 2, 2])
+col1, col2 = st.columns([2, 2])
 with col1:
     name = st.text_input("Name", placeholder="e.g. Lewandowski, Szczesny...")
 with col2:
     team = st.text_input("Club", placeholder="e.g. Barcelona, Juventus...")
-with col3:
-    league = st.text_input("League", placeholder="e.g. La Liga, Serie A...")
 
 limit = st.slider("Max results", 5, 100, 20)
 
 if st.button("🔍 Search", type="primary"):
-    if not any([name, team, league]):
+    if not any([name, team]):
         st.warning("Enter at least one search criteria")
     else:
         with st.spinner("Searching..."):
@@ -58,8 +66,6 @@ if st.button("🔍 Search", type="primary"):
                     params["name"] = name
                 if team:
                     params["team"] = team
-                if league:
-                    params["league"] = league
 
                 response = requests.get(f"{API_BASE_URL}/players/search", params=params)
                 response.raise_for_status()
@@ -71,7 +77,7 @@ if st.button("🔍 Search", type="primary"):
                     # Display with position
                     for p in players:
                         pos_display = get_position_display(p.get("position"))
-                        st.markdown(f"**{p['name']}** - {p.get('team', 'N/A')} ({pos_display})")
+                        st.markdown(f"**{p['name']}** - {clean_team_name(p.get('team'))} ({pos_display})")
                 else:
                     st.info("No players found matching criteria")
 

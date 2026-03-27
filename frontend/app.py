@@ -365,6 +365,16 @@ def get_position_display(position: str | None) -> str:
         return "⚽ Unknown"
 
 
+def clean_team_name(team: str | None) -> str:
+    """Clean team name - remove duplicate player name if present."""
+    if not team:
+        return "N/A"
+    # If team contains " - ", take only the part after it
+    if " - " in team:
+        return team.split(" - ", 1)[1]
+    return team
+
+
 # ============================================
 # SIDEBAR
 # ============================================
@@ -442,14 +452,14 @@ with tab1:
             player_options = {}
             for p in players:
                 pos_display = get_position_display(p.get('position'))
-                label = f"{p['name']} - {p.get('team', 'N/A')} ({pos_display})"
+                label = f"{p['name']} - {clean_team_name(p.get('team'))} ({pos_display})"
                 player_options[label] = p
 
             selected = st.selectbox("Select player:", options=list(player_options.keys()), key="dashboard_player_select")
             selected_player = player_options[selected]
 
-        # Season selector
-        season = st.selectbox("Season", ["2025/26", "2024/25", "2023/24"], key="dashboard_season")
+        # Season hardcoded to current
+        season = "2025/26"
 
         # Fetch and display detailed stats
         with st.spinner("Loading stats..."):
@@ -463,7 +473,7 @@ with tab1:
             header_text = f"📊 {detailed_stats['player_name']}"
             if is_gk:
                 header_text += " 🧤 Goalkeeper"
-            header_text += f" - {detailed_stats['player_team']}"
+            header_text += f" - {clean_team_name(detailed_stats['player_team'])}"
             st.subheader(header_text)
 
             # 4 columns: League | European | Domestic | Total
@@ -499,7 +509,7 @@ with tab1:
             st.info("🎯 Use filters in the sidebar to search for players")
 
 with tab2:
-    st.header("Player Search")
+    st.markdown('<h2 style="text-align: center;">🔍 Player Search</h2>', unsafe_allow_html=True)
 
     # Fetch filter options for autocomplete
     filter_options = fetch_filter_options()
@@ -511,45 +521,33 @@ with tab2:
     def on_team_change():
         st.session_state["search_active_filter"] = "team"
 
-    def on_league_change():
-        st.session_state["search_active_filter"] = "league"
-
     # Initialize active filter
     if "search_active_filter" not in st.session_state:
         st.session_state["search_active_filter"] = None
 
     # Search filters with autocomplete
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns([2, 1])
     with col1:
         name_options = [""] + filter_options.get("names", [])
         search_name = st.selectbox("Name", name_options, index=0, placeholder="Select or type...", on_change=on_name_change, key="search_name_select")
     with col2:
         team_options = [""] + filter_options.get("teams", [])
         search_team = st.selectbox("Club", team_options, index=0, placeholder="Select or type...", on_change=on_team_change, key="search_team_select")
-    with col3:
-        league_options = [""] + filter_options.get("leagues", [])
-        search_league = st.selectbox("League", league_options, index=0, placeholder="Select or type...", on_change=on_league_change, key="search_league_select")
 
     # Use only the filter that was last changed
     active_filter = st.session_state.get("search_active_filter")
 
     if active_filter == "name" and search_name:
         search_team = None
-        search_league = None
     elif active_filter == "team" and search_team:
         search_name = None
-        search_league = None
-    elif active_filter == "league" and search_league:
-        search_name = None
-        search_team = None
 
     # Auto-search when any filter is set
-    if search_name or search_team or search_league:
+    if search_name or search_team:
         with st.spinner("Searching..."):
             players = fetch_players(
                 name=search_name if search_name else None,
                 team=search_team if search_team else None,
-                league=search_league if search_league else None,
             )
 
         if players:
@@ -561,14 +559,14 @@ with tab2:
                 player_options = {}
                 for p in players:
                     pos_display = get_position_display(p.get('position'))
-                    label = f"{p['name']} - {p.get('team', 'N/A')} ({pos_display})"
+                    label = f"{p['name']} - {clean_team_name(p.get('team'))} ({pos_display})"
                     player_options[label] = p
 
                 selected = st.selectbox("Select player:", options=list(player_options.keys()), key="player_select")
                 selected_player = player_options[selected]
 
-            # Season selector
-            season = st.selectbox("Season", ["2025/26", "2024/25", "2023/24"], key="stats_season")
+            # Season hardcoded to current
+            season = "2025/26"
 
             # Fetch detailed stats
             with st.spinner("Loading stats..."):
@@ -582,7 +580,7 @@ with tab2:
                 header_text = f"📊 {detailed_stats['player_name']}"
                 if is_gk:
                     header_text += " 🧤 Goalkeeper"
-                header_text += f" - {detailed_stats['player_team']}"
+                header_text += f" - {clean_team_name(detailed_stats['player_team'])}"
                 st.subheader(header_text)
 
                 # 4 columns: League | European | Domestic | Total
@@ -644,7 +642,7 @@ with tab2:
         st.info("👆 Select a filter above to search")
 
 with tab3:
-    st.header("⚖️ Player Comparison")
+    st.markdown('<h2 style="text-align: center;">⚖️ Player Comparison</h2>', unsafe_allow_html=True)
 
     # Fetch all players
     all_players = fetch_players(limit=100)
@@ -670,19 +668,22 @@ with tab3:
         with col2:
             sel2 = st.selectbox("Player 2", option_list, key="compare_p2_final")
 
-        season_cmp = st.selectbox("Season", ["2025/26", "2024/25"], key="compare_season_final")
+        # Season hardcoded to current
+        season_cmp = "2025/26"
 
         # Check if players are selected
         if sel1 != "-- Select --" and sel2 != "-- Select --":
             p1 = player_options[sel1]
             p2 = player_options[sel2]
 
-            gk1 = p1.get("position") == "GK"
-            gk2 = p2.get("position") == "GK"
-
-            if gk1 != gk2:
+            # Check if same player
+            if p1['id'] == p2['id']:
+                st.error("❌ Cannot compare a player with themselves. Select two different players.")
+            elif p1.get("position") != p2.get("position") and (p1.get("position") == "GK" or p2.get("position") == "GK"):
                 st.error("❌ Cannot compare goalkeeper with field player")
             else:
+                gk1 = p1.get("position") == "GK"
+                gk2 = p2.get("position") == "GK"
                 is_gk = gk1
                 st.info(f"📅 {season_cmp} | {'🧤 Goalkeepers' if is_gk else '⚽ Field Players'} | 📊 League games only")
 

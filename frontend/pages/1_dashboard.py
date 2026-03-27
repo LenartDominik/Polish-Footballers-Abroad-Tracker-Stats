@@ -20,8 +20,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.markdown("---")
 
-# Season selector
-season = st.selectbox("Season", ["2025/26", "2024/25", "2023/24"], index=0)
+# Season hardcoded to current
+season = "2025/26"
 
 # Fetch top players
 @st.cache_data(ttl=300)
