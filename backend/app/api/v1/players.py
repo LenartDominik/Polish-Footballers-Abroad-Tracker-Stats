@@ -300,6 +300,7 @@ async def get_player_detailed_stats(
     # Categorize stats
     league_stats = None
     european_stats = []
+    continental_stats = []  # AFC Champions League, Copa Libertadores, etc.
     domestic_stats = []
 
     # Totals
@@ -320,6 +321,8 @@ async def get_player_detailed_stats(
             league_stats = comp_out
         elif cs.competition_type == "european":
             european_stats.append(comp_out)
+        elif cs.competition_type == "continental":
+            continental_stats.append(comp_out)
         elif cs.competition_type == "domestic":
             domestic_stats.append(comp_out)
 
@@ -375,6 +378,7 @@ async def get_player_detailed_stats(
         season=season,
         league_stats=league_stats,
         european_stats=european_stats,
+        continental_stats=continental_stats,
         domestic_stats=domestic_stats,
         total=total_out,
     )

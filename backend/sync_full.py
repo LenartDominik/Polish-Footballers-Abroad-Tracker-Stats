@@ -9,7 +9,7 @@ import sys
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
-from turtle import position
+# position is tracked via POLISH_PLAYERS dict
 from typing import TypedDict
 
 
@@ -60,8 +60,9 @@ load_dotenv()
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
-from app.db.models import Player, PlayerStats, PlayerStatsByCompetition, SyncState, SyncedMatch
+from app.db.models import Player, PlayerStats, PlayerStatsByCompetition, SyncState, SyncedMatch, PlayerHeatmapPosition
 from app.services.rapidapi import calculate_per_90
+from app.services.rate_limiter import RateLimiter, InMemoryRateLimiter, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_HOUR
 
 # Configuration
 API_HOST = "free-api-live-football-data.p.rapidapi.com"
@@ -97,7 +98,7 @@ POLISH_PLAYERS = {
     402419: {"name": "Przemysław Frankowski", "position": "MF"},
     765466: {"name": "Sebastian Szymański", "position": "MF"},
     891855: {"name": "Jakub Moder", "position": "MF"},
-    560109: ({"name": "Oskar Zawada", "position": "FW"}),
+    560109: {"name": "Oskar Zawada", "position": "FW"},
     1116778: {"name": "Szymon Włodarczyk", "position": "FW"},
     277460: {"name": "Arkadiusz Milik", "position": "FW"},
     689987: {"name": "Jakub Piotrowski", "position": "MF"},
@@ -436,21 +437,13 @@ TEAMS = {
             {"name": "Europa League Qualification", "league_id": 10613},
         ],
 },
-    8232:
-    {
+    8232: {
         "name": "Elversberg",
         "competitions": [
             {"name": "2. Bundesliga", "league_id": 146},
             {"name": "DFB-Pokal", "league_id": 209},
         ],
-     },
-     8188: {
-        "name": "1. FC Magdeburg",
-        "competitions": [
-            {"name": "2. Bundesliga", "league_id": 146},
-            {"name": "DFB-Pokal", "league_id": 209},
-        ],
-},
+    },
     9991: {
         "name": "Gent",
         "competitions": [
@@ -520,11 +513,15 @@ SYNC_INTERVAL_HOURS = 12  # Minimum time between syncs
 
 # Competition type mapping
 def map_competition_type(competition_name: str) -> str:
-    """Map competition name to type (league, european, domestic)."""
+    """Map competition name to type (league, european, continental, domestic)."""
     name_lower = competition_name.lower()
 
-    # International/continental competitions (Champions League, etc.)
-    if any(x in name_lower for x in ["champions league", "europa league", "conference league", "afc champions"]):
+    # AFC Champions League (Asian) - separate from European
+    if "afc champions" in name_lower:
+        return "continental"
+
+    # European competitions (Champions League, Europa League, Conference League)
+    if any(x in name_lower for x in ["champions league", "europa league", "conference league"]):
         return "european"
 
     # Domestic cups (national cups, supercups)
@@ -687,6 +684,10 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
     print(f"{'='*60}")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
+        # Create rate limiter
+        limiter = RateLimiter(session)
+        print(f"  🔧 Rate limiter initialized (max {MAX_REQUESTS_PER_MINUTE}/min, {MAX_REQUESTS_PER_HOUR}/hour)")
+
         # Collect stats per competition - typed defaultdict
         stats_by_competition: defaultdict[tuple[str, str, int], defaultdict[int, PlayerMatchStats]] = (
             defaultdict(lambda: defaultdict(_make_player_stats))
@@ -712,15 +713,15 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                         print(f"   ⏭️ Cache valid until {sync_state.next_sync_at}, skipping")
                         continue
 
-            # Fetch matches from API
+            # Fetch matches from API (with rate limiting)
             try:
-                matches = await get_matches_by_league(comp_id, client)
+                matches = await get_matches_by_league(comp_id, client, limiter)
                 api_calls += 1
 
-                # Fallback to search for leagues with no matches
+                # Fallback to search for leagues with no matches (with rate limiting)
                 if len(matches) == 0:
                     matches = await get_matches_by_search(
-                        team_info["name"].replace("FC ", ""), comp_id, client
+                        team_info["name"].replace("FC ", ""), comp_id, client, limiter
                     )
                     api_calls += 1
 
@@ -793,7 +794,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                     continue
 
                 try:
-                    lineup_data = await get_lineup(event_id, is_home, client)
+                    lineup_data = await get_lineup(event_id, is_home, client, limiter)
                     api_calls += 1
 
                     lineup = lineup_data.get("response", {}).get("lineup", {})
@@ -881,11 +882,69 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
 
                         found_players.append(f"{POLISH_PLAYERS[player_rapid_id]['name']} ({parsed['minutes']}')")
 
+                        # Save heatmap position (skip GK - not useful for heatmaps)
+                        if not is_gk and not args.dry_run:
+                            # Try verticalLayout first (more intuitive: x=left-right, y=field position)
+                            # Fall back to horizontalLayout if verticalLayout not available
+                            v_layout = player.get("verticalLayout")
+                            h_layout = player.get("horizontalLayout")
+                            layout = v_layout or h_layout
+
+                            if layout:
+                                try:
+                                    # verticalLayout: x=left-right (0=RIGHT, 1=LEFT from API), y=field position
+                                    # horizontalLayout: x=field position, y=left-right (same convention)
+                                    # We swap x/y and get consistent output: pos_x=field position, pos_y=left-right
+                                    # pos_y convention: 0=RIGHT, 1=LEFT (from viewer perspective)
+                                    if v_layout:
+                                        pos_x_val = v_layout.get("y", 0)  # field position (defense=0, attack=1)
+                                        pos_y_val = v_layout.get("x", 0)  # left-right (0=RIGHT=1=LEFT)
+                                        zone_w = v_layout.get("width", 0)
+                                        zone_h = v_layout.get("height", 0)
+                                    else:
+                                        # horizontalLayout has same convention
+                                        pos_x_val = h_layout.get("x", 0)  # field position (defense=0, attack=1)
+                                        pos_y_val = h_layout.get("y", 0)  # left-right (0=RIGHT=1=LEFT)
+                                        zone_w = h_layout.get("width", 0)
+                                        zone_h = h_layout.get("height", 0)
+
+                                    # After swap:
+                                    # pos_x = field position (defense=0, attack=1)
+                                    # pos_y = left-right (0=RIGHT, 1=LEFT from viewer perspective)
+
+                                    stmt = insert(PlayerHeatmapPosition).values(
+                                        player_id=player_db.id,
+                                        match_id=event_id,
+                                        season="2025/26",
+                                        pos_x=pos_x_val,
+                                        pos_y=pos_y_val,
+                                        zone_width=zone_w,
+                                        zone_height=zone_h,
+                                        competition_name=comp_name,
+                                        competition_type=comp_type,
+                                        formation=lineup.get("formation"),
+                                        minutes_played=parsed["minutes"],
+                                        is_starter=parsed["started"],
+                                    ).on_conflict_do_update(
+                                        constraint="uq_heatmap_player_match_season",
+                                        set_={
+                                            "pos_x": pos_x_val,
+                                            "pos_y": pos_y_val,
+                                            "zone_width": zone_w,
+                                            "zone_height": zone_h,
+                                            "minutes_played": parsed["minutes"],
+                                            "is_starter": parsed["started"],
+                                        }
+                                    )
+                                    await session.execute(stmt)
+                                except Exception as e:
+                                    print(f"   Heatmap save error: {e}")
+
                     # Fetch GK stats if needed
                     if gk_playing:
                         try:
-                            match_score = await get_match_score(event_id, client)
-                            match_stats = await get_match_all_stats(event_id, client)
+                            match_score = await get_match_score(event_id, client, limiter)
+                            match_stats = await get_match_all_stats(event_id, client, limiter)
                             api_calls += 2
                             gk_stats = extract_gk_match_stats(match_score, match_stats, is_home)
                             print(f"   GK stats: saves={gk_stats['saves']}, GA={gk_stats['goals_against']}, CS={gk_stats['clean_sheet']}")
@@ -1138,8 +1197,11 @@ async def aggregate_to_season_total(session, player_filter: list[int] | None = N
         print(f"   {player.name}: {total['matches_total']} matches, {total['goals']}G, {total['assists']}A")
 
 
-async def get_matches_by_league(league_id: int, client: httpx.AsyncClient) -> list:
-    """Get all matches from a league."""
+async def get_matches_by_league(league_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> list:
+    """Get all matches from a league with rate limiting."""
+    if limiter:
+        await limiter.acquire()
+
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": API_HOST,
@@ -1163,8 +1225,11 @@ async def get_matches_by_league(league_id: int, client: httpx.AsyncClient) -> li
     return matches if isinstance(matches, list) else []
 
 
-async def get_matches_by_search(team_name: str, league_id: int, client: httpx.AsyncClient) -> list:
-    """Get matches from a league using search endpoint (for leagues like Supercopa)."""
+async def get_matches_by_search(team_name: str, league_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> list:
+    """Get matches from a league using search endpoint (for leagues like Supercopa) with rate limiting."""
+    if limiter:
+        await limiter.acquire()
+
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": API_HOST,
@@ -1203,8 +1268,11 @@ async def get_matches_by_search(team_name: str, league_id: int, client: httpx.As
     return matches
 
 
-async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient) -> dict:
-    """Get lineup for a match."""
+async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict:
+    """Get lineup for a match with rate limiting."""
+    if limiter:
+        await limiter.acquire()
+
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": API_HOST,
@@ -1221,8 +1289,11 @@ async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient) ->
     return response.json()
 
 
-async def get_match_score(event_id: int, client: httpx.AsyncClient) -> dict:
-    """Get match score for GK stats (goals conceded, clean sheets)."""
+async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict:
+    """Get match score for GK stats (goals conceded, clean sheets) with rate limiting."""
+    if limiter:
+        await limiter.acquire()
+
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": API_HOST,
@@ -1237,8 +1308,11 @@ async def get_match_score(event_id: int, client: httpx.AsyncClient) -> dict:
     return response.json()
 
 
-async def get_match_all_stats(event_id: int, client: httpx.AsyncClient) -> dict:
-    """Get all match stats for GK stats (shots on target, saves)."""
+async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict:
+    """Get all match stats for GK stats (shots on target, saves) with rate limiting."""
+    if limiter:
+        await limiter.acquire()
+
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": API_HOST,

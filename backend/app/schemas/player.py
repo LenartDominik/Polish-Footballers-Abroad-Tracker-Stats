@@ -128,6 +128,7 @@ class PlayerDetailedStatsOut(BaseModel):
     # Competition breakdown
     league_stats: Optional[CompetitionStatsOut] = None
     european_stats: list[CompetitionStatsOut] = []
+    continental_stats: list[CompetitionStatsOut] = []  # AFC Champions League, Copa Libertadores, etc.
     domestic_stats: list[CompetitionStatsOut] = []
 
     # Season total (aggregated)

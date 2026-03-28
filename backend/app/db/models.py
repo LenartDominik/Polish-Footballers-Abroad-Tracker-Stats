@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     UniqueConstraint,
+    Boolean,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,6 +43,9 @@ class Player(Base):
     )
     stats_by_competition: Mapped[list["PlayerStatsByCompetition"]] = relationship(
         "PlayerStatsByCompetition", back_populates="player", cascade="all, delete-orphan"
+    )
+    heatmap_positions: Mapped[list["PlayerHeatmapPosition"]] = relationship(
+        "PlayerHeatmapPosition", back_populates="player", cascade="all, delete-orphan"
     )
 
 
@@ -199,3 +203,49 @@ class SyncedMatch(Base):
     team_id: Mapped[int] = mapped_column(Integer)
     competition_id: Mapped[int] = mapped_column(Integer)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PlayerHeatmapPosition(Base):
+    """Player position data per match for heatmaps."""
+
+    __tablename__ = "player_heatmap_positions"
+    __table_args__ = (
+        UniqueConstraint("player_id", "match_id", "season", name="uq_heatmap_player_match_season"),
+        Index("idx_heatmap_player", "player_id", "match_id"),
+        Index("idx_heatmap_season", "season"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    player_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("players.id", ondelete="CASCADE"))
+    match_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    season: Mapped[str] = mapped_column(String(10), nullable=False, default="2025/26")
+
+    # Position data (normalized 0-1 from horizontalLayout)
+    pos_x: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
+    pos_y: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
+    zone_width: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
+    zone_height: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
+
+    # Match metadata
+    competition_name: Mapped[Optional[str]] = mapped_column(String(100))
+    competition_type: Mapped[Optional[str]] = mapped_column(String(20))  # league, european, domestic
+    formation: Mapped[Optional[str]] = mapped_column(String(20))
+    minutes_played: Mapped[int] = mapped_column(Integer, default=0)
+    is_starter: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    player: Mapped["Player"] = relationship("Player", back_populates="heatmap_positions")
+
+
+class ApiRateLimit(Base):
+    """Track API requests for rate limiting."""
+
+    __tablename__ = "api_rate_limit"
+    __table_args__ = (
+        Index("idx_api_rate_limit_timestamp", "timestamp"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
