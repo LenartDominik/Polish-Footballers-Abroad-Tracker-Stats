@@ -162,6 +162,135 @@ def fetch_player_detailed_stats(player_id: int, season: Optional[str] = None) ->
         return None
 
 
+def fetch_player_heatmap(player_id: int, season: str = "2025/26") -> Optional[dict]:
+    """Fetch player heatmap position data."""
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/players/{player_id}/heatmap",
+            params={"season": season}
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        return None
+
+
+import numpy as np
+
+
+def interpret_position(x: float, y: float) -> str:
+    """Interpret normalized position coordinates to human-readable position.
+
+    X: 0=own goal, 1=opponent goal (attack direction)
+    Y: 0=right sideline, 1=left sideline (from viewer perspective)
+    """
+    # Y interpretation
+    if y < 0.35:
+        side = "Right"
+    elif y > 0.65:
+        side = "Left"
+    else:
+        side = "Center"
+
+    # X interpretation
+    if x < 0.35:
+        depth = "Defensive"
+    elif x > 0.65:
+        depth = "Attacking"
+    else:
+        depth = "Midfield"
+
+    return f"{depth} {side}"
+
+
+def get_position_side(y: float) -> str:
+    """Get just the side (Left/Center/Right) from Y coordinate.
+
+    API convention: Y=0=RIGHT, Y=1=LEFT (from viewer perspective)
+    """
+    if y < 0.35:
+        return "Right"
+    elif y > 0.65:
+        return "Left"
+    else:
+        return "Center"
+
+
+def create_heatmap_figure(positions: List[dict], player_name: str) -> go.Figure:
+    """Create a pitch heatmap visualization from position data."""
+    if not positions:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No position data available",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="#888")
+        )
+        return fig
+
+    # Extract positions
+    x = [p["pos_x"] for p in positions]
+    y = [p["pos_y"] for p in positions]
+    weights = [p.get("minutes_played", 1) for p in positions]
+
+    # Create 2D histogram for density (20x20 grid)
+    x_bins = np.linspace(0, 1, 21)
+    y_bins = np.linspace(0, 1, 21)
+
+    heatmap, xedges, yedges = np.histogram2d(x, y, bins=[x_bins, y_bins], weights=weights)
+
+    # Create figure
+    fig = go.Figure()
+
+    # Add heatmap trace
+    fig.add_trace(go.Heatmap(
+        z=heatmap.T,
+        x=xedges[:-1],
+        y=yedges[:-1],
+        colorscale=[
+            [0, "rgba(0,0,0,0)"],
+            [0.2, "rgba(0,100,0,0.3)"],
+            [0.5, "rgba(255,165,0,0.5)"],
+            [0.8, "rgba(255,69,0,0.7)"],
+            [1, "rgba(255,0,0,0.9)"]
+        ],
+        showscale=True,
+        colorbar=dict(title=dict(text="Minutes", font=dict(color="#888")), tickfont=dict(color="#888")),
+        hovertemplate="X: %{x:.2f}<br>Y: %{y:.2f}<br>Minutes: %{z:.0f}<extra></extra>",
+    ))
+
+    # Add pitch outline
+    fig.add_shape(type="rect", x0=0, y0=0, x1=1, y1=1, line=dict(color="#444", width=2))
+
+    # Add penalty areas
+    fig.add_shape(type="rect", x0=0, y0=0.21, x1=0.17, y1=0.79, line=dict(color="#444", width=1))
+    fig.add_shape(type="rect", x0=0.83, y0=0.21, x1=1, y1=0.79, line=dict(color="#444", width=1))
+
+    # Add goal areas
+    fig.add_shape(type="rect", x0=0, y0=0.36, x1=0.06, y1=0.64, line=dict(color="#444", width=1))
+    fig.add_shape(type="rect", x0=0.94, y0=0.36, x1=1, y1=0.64, line=dict(color="#444", width=1))
+
+    # Add center line
+    fig.add_shape(type="line", x0=0.5, y0=0, x1=0.5, y1=1, line=dict(color="#444", width=1))
+
+    # Add center circle
+    fig.add_shape(type="circle", x0=0.35, y0=0.35, x1=0.65, y1=0.65, line=dict(color="#444", width=1))
+
+    # Update layout
+    fig.update_layout(
+        title=dict(text=f"📍 {player_name} - Position Zones", font=dict(color="#fff", size=14)),
+        xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+        yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, scaleanchor="x", scaleratio=0.7),
+        plot_bgcolor="#1a1a1a",
+        paper_bgcolor="#1a1a1a",
+        width=500,
+        height=350,
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+
+    return fig
+
+
 def fetch_leagues() -> List[dict]:
     """Fetch available leagues."""
     try:
@@ -417,7 +546,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Tabs
-tab1, tab2, tab3 = st.tabs(["🏆 Dashboard", "🔍 Search", "⚖️ Compare"])
+tab1, tab2, tab3, tab4 = st.tabs(["🏆 Dashboard", "🔍 Search", "⚖️ Compare", "📍 Position Zones"])
 
 with tab1:
     # Filters are MUTUALLY EXCLUSIVE - use whichever was last changed
@@ -476,16 +605,24 @@ with tab1:
             header_text += f" - {clean_team_name(detailed_stats['player_team'])}"
             st.subheader(header_text)
 
-            # 4 columns: League | European | Domestic | Total
+            # 4 columns: League | European/Continental | Domestic | Total
             col1, col2, col3, col4 = st.columns(4)
 
             # Reuse display function from Search tab
             display_comp_stats(col1, "🏆", "League", "2025/26", detailed_stats.get("league_stats"), is_gk)
 
+            # Handle European or Continental stats (depending on player)
             european_list = detailed_stats.get("european_stats", [])
-            european_combined = aggregate_stats_list(european_list)
-            display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
+            continental_list = detailed_stats.get("continental_stats", [])
 
+            if continental_list:
+                # Player has AFC Champions League or other continental competition
+                continental_combined = aggregate_stats_list(continental_list)
+                display_comp_stats(col2, "🌏", "AFC Champions League", "2025/26", continental_combined, is_gk, continental_list)
+            else:
+                # European competitions
+                european_combined = aggregate_stats_list(european_list)
+                display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
             domestic_list = detailed_stats.get("domestic_stats", [])
             domestic_combined = aggregate_stats_list(domestic_list)
             display_comp_stats(col3, "🏆", "Domestic Cups", "2025/26", domestic_combined, is_gk, domestic_list)
@@ -511,8 +648,8 @@ with tab1:
 with tab2:
     st.markdown('<h2 style="text-align: center;">🔍 Player Search</h2>', unsafe_allow_html=True)
 
-    # Fetch filter options for autocomplete
-    filter_options = fetch_filter_options()
+    # Use cached filter options
+    filter_options = get_cached_filter_options()
 
     # Track which filter was last changed
     def on_name_change():
@@ -583,51 +720,27 @@ with tab2:
                 header_text += f" - {clean_team_name(detailed_stats['player_team'])}"
                 st.subheader(header_text)
 
-                # 4 columns: League | European | Domestic | Total
+                # 4 columns: League | European/Continental | Domestic | Total
                 col1, col2, col3, col4 = st.columns(4)
 
                 # Display columns
                 display_comp_stats(col1, "🏆", "League Stats", "2025/26", detailed_stats.get("league_stats"), is_gk)
 
+                # Handle European or Continental stats (depending on player)
                 european_list = detailed_stats.get("european_stats", [])
-                european_combined = None
-                if european_list:
-                    eur_saves = sum(e.get("saves", 0) or 0 for e in european_list)
-                    eur_ga = sum(e.get("goals_against", 0) or 0 for e in european_list)
-                    eur_save_pct = round((eur_saves / (eur_saves + eur_ga)) * 100, 1) if (eur_saves + eur_ga) > 0 else 0
-                    european_combined = {
-                        "matches_total": sum(e.get("matches_total", 0) for e in european_list),
-                        "minutes_played": sum(e.get("minutes_played", 0) for e in european_list),
-                        "matches_started": sum(e.get("matches_started", 0) for e in european_list),
-                        "goals": sum(e.get("goals", 0) for e in european_list),
-                        "assists": sum(e.get("assists", 0) for e in european_list),
-                        "rating": sum(e.get("rating", 0) for e in european_list) / len(european_list) if european_list else 0,
-                        "g_per90": sum(e.get("goals", 0) for e in european_list) * 90 / max(1, sum(e.get("minutes_played", 0) for e in european_list)),
-                        "a_per90": sum(e.get("assists", 0) for e in european_list) * 90 / max(1, sum(e.get("minutes_played", 0) for e in european_list)),
-                        "clean_sheets": sum(e.get("clean_sheets", 0) or 0 for e in european_list),
-                        "saves": eur_saves,
-                        "goals_against": eur_ga,
-                        "save_percentage": eur_save_pct,
-                    }
-                display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
+                continental_list = detailed_stats.get("continental_stats", [])
+
+                if continental_list:
+                    # Player has AFC Champions League or other continental competition
+                    continental_combined = aggregate_stats_list(continental_list)
+                    display_comp_stats(col2, "🌏", "AFC Champions League", "2025/26", continental_combined, is_gk, continental_list)
+                else:
+                    # European competitions
+                    european_combined = aggregate_stats_list(european_list)
+                    display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
 
                 domestic_list = detailed_stats.get("domestic_stats", [])
-                domestic_combined = None
-                if domestic_list:
-                    domestic_combined = {
-                        "matches_total": sum(d.get("matches_total", 0) for d in domestic_list),
-                        "minutes_played": sum(d.get("minutes_played", 0) for d in domestic_list),
-                        "matches_started": sum(d.get("matches_started", 0) for d in domestic_list),
-                        "goals": sum(d.get("goals", 0) for d in domestic_list),
-                        "assists": sum(d.get("assists", 0) for d in domestic_list),
-                        "rating": sum(d.get("rating", 0) for d in domestic_list) / len(domestic_list) if domestic_list else 0,
-                        "g_per90": sum(d.get("goals", 0) for d in domestic_list) * 90 / max(1, sum(d.get("minutes_played", 0) for d in domestic_list)),
-                        "a_per90": sum(d.get("assists", 0) for d in domestic_list) * 90 / max(1, sum(d.get("minutes_played", 0) for d in domestic_list)),
-                        "clean_sheets": sum(d.get("clean_sheets", 0) or 0 for d in domestic_list),
-                        "saves": sum(d.get("saves", 0) or 0 for d in domestic_list),
-                        "goals_against": sum(d.get("goals_against", 0) or 0 for d in domestic_list),
-                        "save_percentage": sum(d.get("save_percentage", 0) or 0 for d in domestic_list) / len(domestic_list) if domestic_list else 0,
-                    }
+                domestic_combined = aggregate_stats_list(domestic_list)
                 display_comp_stats(col3, "🏆", "Domestic Cups", "2025/26", domestic_combined, is_gk, domestic_list)
 
                 total = detailed_stats.get("total")
@@ -779,6 +892,127 @@ with tab3:
                             st.warning("No data")
         else:
             st.info("👆 Select two players from the lists above")
+
+# ============================================
+# TAB 4: HEATMAPS
+# ============================================
+with tab4:
+    st.markdown('<h2 style="text-align: center;">📍 Position Zones</h2>', unsafe_allow_html=True)
+
+    # Premium badge
+    st.markdown("""
+    <div style="text-align: center; margin-bottom: 20px;">
+        <span style="background: linear-gradient(90deg, #FFD700, #FFA500); color: #000; padding: 4px 12px;
+                     border-radius: 12px; font-weight: bold; font-size: 0.8rem;">⭐ PREMIUM FEATURE</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Fetch all players for selection
+    all_players = fetch_players(limit=100)
+
+    if not all_players:
+        st.error("⚠️ Backend not running! Start: `cd backend && uv run uvicorn app.main:app --reload --port 8000`")
+    else:
+        # Filter out goalkeepers for heatmap selection
+        field_players = [p for p in all_players if p.get("position") != "GK"]
+
+        if not field_players:
+            st.warning("No field players available for heatmap visualization")
+        else:
+            # Player selection
+            player_options = {}
+            for p in field_players:
+                team = clean_team_name(p.get("team", "N/A"))
+                pos_display = get_position_display(p.get("position"))
+                label = f"{p['name']} - {team} ({pos_display})"
+                player_options[label] = p
+
+            selected = st.selectbox(
+                "Select player:",
+                options=list(player_options.keys()),
+                key="heatmap_player_select"
+            )
+            selected_player = player_options[selected]
+
+            season = "2025/26"
+
+            # Fetch heatmap data
+            with st.spinner("Loading position data..."):
+                heatmap_data = fetch_player_heatmap(selected_player["id"], season)
+
+            if heatmap_data and heatmap_data.get("positions"):
+                st.markdown("---")
+
+                # Legend for users
+                st.info("""
+                **📊 How to read Position Zones:**
+                - **Red zones** = player spent most time in this area
+                - **Multiple zones** = player played different tactical roles across matches
+                - **X=0** = own goal | **X=1** = opponent's goal (attack direction)
+                - **Y=0** = right sideline | **Y=1** = left sideline
+
+                **⚠️ Why fewer matches than expected?**
+                - Only matches with **position data available** from API are shown
+                - Some matches don't have detailed lineup/position data
+                - This is **not** all matches played, only matches with zone data
+                """)
+
+                # Player header
+                st.subheader(f"📍 {selected_player['name']}")
+                st.caption(f"{clean_team_name(selected_player.get('team'))} | {get_position_display(selected_player.get('position'))} | {season}")
+
+                # Create and display heatmap
+                fig = create_heatmap_figure(
+                    heatmap_data["positions"],
+                    selected_player["name"]
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Stats summary
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Matches", heatmap_data["total_matches"])
+                with col2:
+                    total_minutes = sum(p.get("minutes_played", 0) for p in heatmap_data["positions"])
+                    st.metric("Total Minutes", total_minutes)
+                with col3:
+                    avg_pos = heatmap_data.get("avg_position", {})
+                    if avg_pos:
+                        position_text = interpret_position(avg_pos.get('x', 0.5), avg_pos.get('y', 0.5))
+                        st.metric("Avg Position", position_text)
+                        st.caption(f"({avg_pos.get('x', 0):.2f}, {avg_pos.get('y', 0):.2f})")
+                    else:
+                        st.metric("Avg Position", "N/A")
+                with col4:
+                    # Position side breakdown
+                    positions = heatmap_data.get("positions", [])
+                    left_count = sum(1 for p in positions if p.get('pos_y', 0.5) > 0.65)
+                    center_count = sum(1 for p in positions if 0.35 <= p.get('pos_y', 0.5) <= 0.65)
+                    right_count = sum(1 for p in positions if p.get('pos_y', 0.5) < 0.35)
+                    st.metric("Side Breakdown", f"L:{left_count} C:{center_count} R:{right_count}")
+
+                # Match breakdown expander
+                with st.expander(f"📋 {heatmap_data['total_matches']} matches with zone data"):
+                    for pos in heatmap_data["positions"][:10]:  # Show first 10
+                        comp_icon = "🏆" if pos.get("competition_type") == "league" else "🌍" if pos.get("competition_type") == "european" else "🏅"
+                        position_text = interpret_position(pos['pos_x'], pos['pos_y'])
+                        side = get_position_side(pos['pos_y'])
+                        st.markdown(
+                            f"**{comp_icon} {pos.get('competition_name', 'Unknown')}** - "
+                            f"📍 {position_text} ({side}) - "
+                            f"{pos.get('minutes_played', 0)} min"
+                        )
+                    if heatmap_data["total_matches"] > 10:
+                        st.markdown(f"*...and {heatmap_data['total_matches'] - 10} more matches*")
+            else:
+                st.info(f"""
+                📍 No position data available for **{selected_player['name']}** yet.
+
+                Run sync to collect position data:
+                ```
+                cd backend && uv run python sync_full.py
+                ```
+                """)
 
 # ============================================
 # LEGEND
