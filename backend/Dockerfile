@@ -14,8 +14,8 @@ RUN uv pip install --system -e .
 # Copy application
 COPY . .
 
-# Expose port
-EXPOSE 8000
+# Expose port (Render uses $PORT env var)
+EXPOSE $PORT
 
-# Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run application - use PORT env var from Render
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
