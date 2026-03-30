@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     cache_ttl_hours: int = 24
     cache_max_entries: int = 1000
 
+    # Email notifications
+    resend_api_key: str = ""
+    admin_email: str = ""
+
     # Rate Limiting
     rate_limit_requests: int = 100
     rate_limit_period_seconds: int = 60

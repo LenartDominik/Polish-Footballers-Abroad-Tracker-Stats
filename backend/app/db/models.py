@@ -249,3 +249,22 @@ class ApiRateLimit(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class SyncLog(Base):
+    """Sync history for tracking scheduled syncs."""
+
+    __tablename__ = "sync_logs"
+    __table_args__ = (
+        Index("idx_sync_logs_started", "started_at"),
+        Index("idx_sync_logs_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sync_type: Mapped[str] = mapped_column(String(20), default="scheduled")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="running")  # running, success, failed
+    players_updated: Mapped[int] = mapped_column(Integer, default=0)
+    api_calls_used: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
