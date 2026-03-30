@@ -12,6 +12,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
+@router.get("/health-check")
 async def health_check():
     """Basic health check."""
     return {
