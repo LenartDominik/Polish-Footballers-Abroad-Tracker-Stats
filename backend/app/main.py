@@ -81,3 +81,10 @@ async def root():
         "version": "0.1.0",
         "docs": "/docs" if settings.debug else "disabled",
     }
+
+
+@app.get("/health")
+@app.get("/health-check")
+async def health():
+    """Health check for Render."""
+    return {"status": "ok"}
