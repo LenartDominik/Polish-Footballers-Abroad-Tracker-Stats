@@ -117,3 +117,134 @@ SECRET_KEY=
 - `PLAN_POLISH_TRACKER.md` - Full MVP plan with SQL schema
 - `PLAN_ADVANCED_STATS_V2.md` - Detailed stats per competition implementation
 - `PLAN_AUTO_DETECT_PLAYERS.md` - Post-MVP automatic player detection
+
+
+# CLAUDE.md
+
+## Projekt
+
+Ten projekt składa się z:
+- backendu w FastAPI,
+- frontendu w Streamlit,
+- bazy danych Supabase PostgreSQL,
+- deployu na Render.
+
+## Główne zasady pracy
+
+Zawsze pracuj w tej kolejności:
+1. Zrozum problem.
+2. Zrób plan w małych krokach.
+3. Oceń wpływ zmian na backend, frontend, bazę i deploy.
+4. Implementuj tylko zakres, o który proszę.
+5. Na końcu zrób review i wskaż ryzyka.
+6. Nigdy nie czytaj wrażliwych plików i sekretów np. .env i innych
+
+Nie zaczynaj od kodu, jeśli wcześniej nie było analizy problemu i planu.
+
+## Styl pracy
+
+- Pisz jasno, krótko i konkretnie.
+- Nie rób dużych, niekontrolowanych refactorów.
+- Nie zmieniaj wielu warstw naraz bez wyraźnej potrzeby.
+- Najpierw proponuj najmniejszą sensowną zmianę.
+- Jeśli problem nie jest jasny, najpierw podaj możliwe przyczyny i sposób diagnozy.
+- Gdy czegoś brakuje, napisz czego potrzebujesz zamiast zgadywać.
+
+## Backend FastAPI
+
+Przy zmianach w backendzie:
+- zachowuj czytelny podział odpowiedzialności,
+- używaj typowania,
+- dbaj o walidację wejścia i wyjścia,
+- nie mieszaj logiki biznesowej z warstwą endpointów,
+- pokazuj, które pliki zmieniasz i dlaczego.
+
+Zawsze sprawdź:
+- wpływ na request/response,
+- wpływ na modele danych,
+- wpływ na obsługę błędów,
+- wpływ na auth, jeśli dotyczy.
+
+## Frontend Streamlit
+
+Przy zmianach w Streamlit:
+- dbaj o prosty flow użytkownika,
+- pokazuj czytelne komunikaty błędów,
+- nie komplikuj UI bez potrzeby,
+- nie zmieniaj backendu, jeśli proszę tylko o frontend,
+- uwzględniaj stany: loading, brak danych, błąd.
+
+## Baza danych Supabase / PostgreSQL
+
+Przy zmianach w bazie:
+- najpierw oceń wpływ na obecny schemat,
+- wskaż ryzyko migracji,
+- sprawdź wpływ na endpointy FastAPI,
+- sprawdź wpływ na Streamlit,
+- zwróć uwagę na relacje, indeksy i uprawnienia.
+
+Nie proponuj zmian w bazie bez oceny skutków.
+
+## Render / deploy
+
+Przy zmianach sprawdzaj też:
+- zmienne środowiskowe,
+- zależności i wersje pakietów,
+- komendy startowe,
+- wpływ zmian na deploy,
+- możliwe różnice między local a production.
+
+## Debugowanie
+
+Gdy analizujesz błąd:
+1. Najpierw wypisz możliwe przyczyny.
+2. Wskaż najbardziej prawdopodobną.
+3. Zaproponuj minimalny sposób potwierdzenia diagnozy.
+4. Dopiero potem zaproponuj poprawkę.
+
+Nie zgaduj bez analizy.
+
+## Review zmian
+
+Po każdej większej zmianie zrób krótkie review:
+- poprawność logiki,
+- czytelność,
+- nazewnictwo,
+- ryzyko regresji,
+- bezpieczeństwo,
+- wpływ na bazę, API i frontend.
+
+Pisz krótko i konkretnie.
+
+## Security
+
+Zawsze zwracaj uwagę na:
+- sekrety i env,
+- auth i autoryzację,
+- walidację danych,
+- zapytania do bazy,
+- nadmiarowe ujawnianie błędów,
+- dostęp do danych użytkowników.
+
+Jeśli widzisz ryzyko, nazwij je wprost.
+
+## Sposób odpowiedzi
+
+Domyślnie odpowiadaj w formacie:
+1. Krótki opis problemu.
+2. Założenia.
+3. Ryzyka.
+4. Plan.
+5. Implementacja albo rekomendacja.
+6. Krótkie review po zmianie.
+
+Jeśli proszę tylko o analizę, nie generuj kodu.
+Jeśli proszę tylko o kod, najpierw daj krótki plan, potem kod.
+
+
+## Ważne dla mnie
+
+Jestem początkujący.
+Chcę krótkich wyjaśnień.
+Nie chcę zbyt skomplikowanych rozwiązań.
+Jeśli da się zrobić coś prościej, zaproponuj prostszą wersję.
