@@ -8,7 +8,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
-from utils.theme import get_theme_css, render_header, theme_toggle, init_theme
+from utils.theme import get_theme_css, render_header, COLORS
 
 # Load environment variables
 load_dotenv()
@@ -22,12 +22,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Initialize theme
-dark_mode = init_theme()
-dark_mode = theme_toggle()
-
 # Apply theme CSS
-st.markdown(get_theme_css(dark_mode), unsafe_allow_html=True)
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 
 def fetch_players(
@@ -288,33 +284,40 @@ def get_cached_filter_options() -> dict:
 
 def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | None, is_gk: bool, details_list=None):
     """Display stats column in card style - used by both Dashboard and Search tabs."""
+    # Use dark theme colors (only theme supported)
+    bg_card = COLORS['bg_card']
+    text_primary = COLORS['text_primary']
+    text_secondary = COLORS['text_secondary']
+    text_muted = COLORS['text_muted']
+    border_color = COLORS['border_color']
+
     with col:
-        # Card container with dark theme
+        # Card container with theme support
         st.markdown(f"""
-        <div style="background-color: #1a1a1a; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-            <div style="font-size: 1.1rem; font-weight: 600; color: #fff; margin-bottom: 2px;">{icon} {title}</div>
-            <div style="font-size: 0.75rem; color: #666; margin-bottom: 12px;">{subtitle}</div>
+        <div style="background-color: {bg_card}; border: 1px solid {border_color}; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
+            <div style="font-size: 1.1rem; font-weight: 600; color: {text_primary}; margin-bottom: 2px;">{icon} {title}</div>
+            <div style="font-size: 0.75rem; color: {text_muted}; margin-bottom: 12px;">{subtitle}</div>
         """, unsafe_allow_html=True)
 
         if stats is None:
-            st.markdown('<div style="color: #666; text-align: center; padding: 20px;">No data</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="color: {text_muted}; text-align: center; padding: 20px;">No data</div>', unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
             return
 
         # Main stats table - DIFFERENT for GK vs Field Players
         if is_gk:
             # Goalkeeper stats
-            st.markdown("""
+            st.markdown(f"""
             <table style="width: 100%; border-collapse: collapse;">
-                <tr style="border-bottom: 1px solid #333;">
-                    <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Games</th>
-                    <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">CS</th>
-                    <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">GA</th>
+                <tr style="border-bottom: 1px solid {border_color};">
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Games</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">CS</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">GA</th>
                 </tr>
                 <tr>
-                    <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
-                    <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
-                    <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
+                    <td style="color: {text_primary}; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{{}}</td>
+                    <td style="color: {text_primary}; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{{}}</td>
+                    <td style="color: {text_primary}; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{{}}</td>
                 </tr>
             </table>
             """.format(
@@ -324,17 +327,17 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
             ), unsafe_allow_html=True)
         else:
             # Field player stats
-            st.markdown("""
+            st.markdown(f"""
             <table style="width: 100%; border-collapse: collapse;">
-                <tr style="border-bottom: 1px solid #333;">
-                    <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Games</th>
-                    <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Goals</th>
-                    <th style="color: #888; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Assists</th>
+                <tr style="border-bottom: 1px solid {border_color};">
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Games</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Goals</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Assists</th>
                 </tr>
                 <tr>
-                    <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
-                    <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
-                    <td style="color: #fff; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{}</td>
+                    <td style="color: {text_primary}; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{{}}</td>
+                    <td style="color: {text_primary}; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{{}}</td>
+                    <td style="color: {text_primary}; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{{}}</td>
                 </tr>
             </table>
             """.format(
@@ -346,8 +349,8 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
         # Rating
         rating = stats.get("rating", 0)
         st.markdown(f"""
-        <div style="margin-top: 8px; color: #888; font-size: 0.8rem;">
-            Rating: <span style="color: #fff; font-weight: 500;">{rating:.2f}</span>
+        <div style="margin-top: 8px; color: {text_muted}; font-size: 0.8rem;">
+            Rating: <span style="color: {text_primary}; font-weight: 500;">{rating:.2f}</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -361,22 +364,22 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
                 saves = stats.get("saves", 0) or 0
                 save_pct = stats.get("save_percentage", 0) or 0
                 st.markdown(f"""
-                <div style="color: #ccc; font-size: 0.85rem;">
+                <div style="color: {text_secondary}; font-size: 0.85rem;">
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>Starts</span>
-                        <span style="color: #fff; font-weight: 500;">{starts}</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{starts}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>Minutes</span>
-                        <span style="color: #fff; font-weight: 500;">{minutes:,}</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{minutes:,}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>Saves</span>
-                        <span style="color: #fff; font-weight: 500;">{saves}</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{saves}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>Save %</span>
-                        <span style="color: #fff; font-weight: 500;">{save_pct:.1f}%</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{save_pct:.1f}%</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -386,33 +389,33 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
                 a_per90 = stats.get("a_per90", 0) or 0
                 ga_per90 = g_per90 + a_per90
                 st.markdown(f"""
-                <div style="color: #ccc; font-size: 0.85rem;">
+                <div style="color: {text_secondary}; font-size: 0.85rem;">
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>Starts</span>
-                        <span style="color: #fff; font-weight: 500;">{starts}</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{starts}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>Minutes</span>
-                        <span style="color: #fff; font-weight: 500;">{minutes:,}</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{minutes:,}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>G/90</span>
-                        <span style="color: #fff; font-weight: 500;">{g_per90:.2f}</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{g_per90:.2f}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>A/90</span>
-                        <span style="color: #fff; font-weight: 500;">{a_per90:.2f}</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{a_per90:.2f}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                         <span>G+A/90</span>
-                        <span style="color: #fff; font-weight: 500;">{ga_per90:.2f}</span>
+                        <span style="color: {text_primary}; font-weight: 500;">{ga_per90:.2f}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
             # Show competition names if multiple
             if details_list and len(details_list) > 1:
-                st.markdown('<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #333; color: #666; font-size: 0.75rem;">', unsafe_allow_html=True)
+                st.markdown(f'<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid {border_color}; color: {text_muted}; font-size: 0.75rem;">', unsafe_allow_html=True)
                 for d in details_list:
                     st.markdown(f"• {d.get('competition_name', 'N/A')}: {d.get('matches_total', 0)} apps")
                 st.markdown('</div>', unsafe_allow_html=True)

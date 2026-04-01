@@ -10,16 +10,14 @@ import requests
 
 import sys
 sys.path.append('..')
-from utils.theme import get_theme_css, render_header, theme_toggle, init_theme, apply_plotly_theme
+from utils.theme import get_theme_css, render_header, apply_plotly_theme
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
 
-# Theme setup
-dark_mode = init_theme()
-dark_mode = theme_toggle()
-st.markdown(get_theme_css(dark_mode), unsafe_allow_html=True)
+# Apply theme CSS
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # Render header
 render_header("Dashboard", "📊")

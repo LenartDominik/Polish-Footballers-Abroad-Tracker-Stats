@@ -8,7 +8,7 @@ import requests
 
 import sys
 sys.path.append('..')
-from utils.theme import get_theme_css, render_header, theme_toggle, init_theme
+from utils.theme import get_theme_css, render_header
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
@@ -41,10 +41,8 @@ def clean_team_name(team: str | None) -> str:
 
 st.set_page_config(page_title="Search", page_icon="🔍", layout="wide")
 
-# Theme setup
-dark_mode = init_theme()
-dark_mode = theme_toggle()
-st.markdown(get_theme_css(dark_mode), unsafe_allow_html=True)
+# Apply theme CSS
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # Render header
 render_header("Player Search", "🔍")
