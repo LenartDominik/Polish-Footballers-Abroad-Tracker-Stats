@@ -8,17 +8,21 @@ import plotly.express as px
 import plotly.graph_objects as go
 import requests
 
+import sys
+sys.path.append('..')
+from utils.theme import get_theme_css, render_header, theme_toggle, init_theme, apply_plotly_theme
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
 
-st.markdown("""
-<div style="text-align: center;">
-    <h1>🇵🇱 Polish Footballers Abroad</h1>
-    <p style="font-size: 1.2rem; color: #888;">Track Polish footballers in the best leagues worldwide!</p>
-</div>
-""", unsafe_allow_html=True)
-st.markdown("---")
+# Theme setup
+dark_mode = init_theme()
+dark_mode = theme_toggle()
+st.markdown(get_theme_css(dark_mode), unsafe_allow_html=True)
+
+# Render header
+render_header("Dashboard", "📊")
 
 # Season hardcoded to current
 season = "2025/26"
@@ -66,6 +70,7 @@ if data:
             color="goals",
             color_continuous_scale="Reds",
         )
+        fig = apply_plotly_theme(fig, dark_mode)
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
@@ -77,6 +82,7 @@ if data:
             title="xG/90 vs Goals (min 500 minutes)",
             labels={"xg_per90": "xG/90", "goals": "Goals"},
         )
+        fig = apply_plotly_theme(fig, dark_mode)
         st.plotly_chart(fig, use_container_width=True)
 
     with tab3:
@@ -88,6 +94,7 @@ if data:
             color="assists",
             color_continuous_scale="Greens",
         )
+        fig = apply_plotly_theme(fig, dark_mode)
         st.plotly_chart(fig, use_container_width=True)
 
 else:
