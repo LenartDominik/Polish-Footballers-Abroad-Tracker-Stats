@@ -6,6 +6,10 @@ import streamlit as st
 import pandas as pd
 import requests
 
+import sys
+sys.path.append('..')
+from utils.theme import get_theme_css, render_header, theme_toggle, init_theme
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 
@@ -37,14 +41,13 @@ def clean_team_name(team: str | None) -> str:
 
 st.set_page_config(page_title="Search", page_icon="🔍", layout="wide")
 
-st.markdown("""
-<div style="text-align: center;">
-    <h1>🇵🇱 Polish Footballers Abroad</h1>
-    <p style="font-size: 1.2rem; color: #888;">Track Polish footballers in the best leagues worldwide!</p>
-</div>
-""", unsafe_allow_html=True)
-st.markdown("---")
-st.markdown('<h2 style="text-align: center;">🔍 Player Search</h2>', unsafe_allow_html=True)
+# Theme setup
+dark_mode = init_theme()
+dark_mode = theme_toggle()
+st.markdown(get_theme_css(dark_mode), unsafe_allow_html=True)
+
+# Render header
+render_header("Player Search", "🔍")
 
 # Search form
 col1, col2 = st.columns([2, 2])
@@ -77,7 +80,14 @@ if st.button("🔍 Search", type="primary"):
                     # Display with position
                     for p in players:
                         pos_display = get_position_display(p.get("position"))
-                        st.markdown(f"**{p['name']}** - {clean_team_name(p.get('team'))} ({pos_display})")
+                        team_name = clean_team_name(p.get("team"))
+
+                        st.markdown(f"""
+                        <div class="player-card">
+                            <div class="player-name">{p['name']}</div>
+                            <div class="player-info">{team_name} | {pos_display}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
                     st.info("No players found matching criteria")
 
