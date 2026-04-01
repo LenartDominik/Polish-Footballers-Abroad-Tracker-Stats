@@ -5,6 +5,10 @@ import streamlit as st
 import plotly.graph_objects as go
 import requests
 
+import sys
+sys.path.append('..')
+from utils.theme import get_theme_css, render_header, theme_toggle, init_theme, apply_plotly_theme, get_chart_colors
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 
@@ -36,14 +40,13 @@ def clean_team_name(team: str | None) -> str:
 
 st.set_page_config(page_title="Compare", page_icon="⚖️", layout="wide")
 
-st.markdown("""
-<div style="text-align: center;">
-    <h1>🇵🇱 Polish Footballers Abroad</h1>
-    <p style="font-size: 1.2rem; color: #888;">Track Polish footballers in the best leagues worldwide!</p>
-</div>
-""", unsafe_allow_html=True)
-st.markdown("---")
-st.markdown('<h2 style="text-align: center;">⚖️ Player Comparison</h2>', unsafe_allow_html=True)
+# Theme setup
+dark_mode = init_theme()
+dark_mode = theme_toggle()
+st.markdown(get_theme_css(dark_mode), unsafe_allow_html=True)
+
+# Render header
+render_header("Player Comparison", "⚖️")
 
 
 def fetch_players(name=None, limit=100):
@@ -188,35 +191,38 @@ if sel1 != "-- Select --" and sel2 != "-- Select --":
                             n1.append(float((a/mx) * 100))
                             n2.append(float((b/mx) * 100))
 
+                    # Get colors
+                    color1, color2 = get_chart_colors()
+
                     fig = go.Figure()
                     fig.add_trace(go.Scatterpolar(
                         r=n1 + [n1[0]],
                         theta=labels + [labels[0]],
                         fill='toself',
                         name=p1['name'],
-                        line_color='#FF6B6B'
+                        line_color=color1
                     ))
                     fig.add_trace(go.Scatterpolar(
                         r=n2 + [n2[0]],
                         theta=labels + [labels[0]],
                         fill='toself',
                         name=p2['name'],
-                        line_color='#4ECDC4'
+                        line_color=color2
                     ))
                     fig.update_layout(
                         polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-                        height=400,
-                        paper_bgcolor='#1a1a1a',
-                        font=dict(color='white')
+                        height=400
                     )
+                    fig = apply_plotly_theme(fig, dark_mode)
                     st.plotly_chart(fig, use_container_width=True)
 
                     # Bar
                     fig2 = go.Figure([
-                        go.Bar(name=p1['name'], x=labels, y=v1, marker_color='#FF6B6B'),
-                        go.Bar(name=p2['name'], x=labels, y=v2, marker_color='#4ECDC4')
+                        go.Bar(name=p1['name'], x=labels, y=v1, marker_color=color1),
+                        go.Bar(name=p2['name'], x=labels, y=v2, marker_color=color2)
                     ])
-                    fig2.update_layout(barmode='group', height=300, paper_bgcolor='#1a1a1a', font=dict(color='white'))
+                    fig2.update_layout(barmode='group', height=300)
+                    fig2 = apply_plotly_theme(fig2, dark_mode)
                     st.plotly_chart(fig2, use_container_width=True)
 
                     # Table
