@@ -211,7 +211,7 @@ if sel1 != "-- Select --" and sel2 != "-- Select --":
                         polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
                         height=400
                     )
-                    fig = apply_plotly_theme(fig, dark_mode)
+                    fig = apply_plotly_theme(fig)
                     st.plotly_chart(fig, use_container_width=True)
 
                     # Bar
@@ -220,7 +220,7 @@ if sel1 != "-- Select --" and sel2 != "-- Select --":
                         go.Bar(name=p2['name'], x=labels, y=v2, marker_color=color2)
                     ])
                     fig2.update_layout(barmode='group', height=300)
-                    fig2 = apply_plotly_theme(fig2, dark_mode)
+                    fig2 = apply_plotly_theme(fig2)
                     st.plotly_chart(fig2, use_container_width=True)
 
                     # Table
