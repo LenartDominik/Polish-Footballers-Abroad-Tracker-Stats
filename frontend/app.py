@@ -8,6 +8,8 @@ import streamlit as st
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
+from utils.theme import get_theme_css, render_header, theme_toggle, init_theme
+
 # Load environment variables
 load_dotenv()
 
@@ -20,70 +22,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for dark theme stats tables
-st.markdown("""
-<style>
-    .stats-container {
-        background-color: #1a1a1a;
-        border-radius: 10px;
-        padding: 15px;
-        margin: 5px;
-        min-height: 300px;
-    }
-    .stats-header {
-        color: #ffffff;
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin-bottom: 15px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #333;
-    }
-    .stats-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .stats-table th {
-        color: #888;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        text-align: left;
-        padding: 8px 5px;
-        border-bottom: 1px solid #333;
-    }
-    .stats-table td {
-        color: #fff;
-        font-size: 1.3rem;
-        font-weight: bold;
-        padding: 10px 5px;
-    }
-    .stats-label {
-        color: #888;
-        font-size: 0.8rem;
-    }
-    .details-section {
-        margin-top: 15px;
-        padding-top: 10px;
-        border-top: 1px solid #333;
-    }
-    .detail-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 5px 0;
-        color: #ccc;
-        font-size: 0.9rem;
-    }
-    .detail-value {
-        color: #fff;
-        font-weight: 500;
-    }
-    .subheader {
-        color: #666;
-        font-size: 0.75rem;
-        margin-top: -5px;
-        margin-bottom: 10px;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Initialize theme
+dark_mode = init_theme()
+dark_mode = theme_toggle()
+
+# Apply theme CSS
+st.markdown(get_theme_css(dark_mode), unsafe_allow_html=True)
 
 
 def fetch_players(
@@ -278,11 +222,9 @@ def create_heatmap_figure(positions: List[dict], player_name: str) -> go.Figure:
 
     # Update layout
     fig.update_layout(
-        title=dict(text=f"📍 {player_name} - Position Zones", font=dict(color="#fff", size=14)),
+        title=dict(text=f"📍 {player_name} - Position Zones"),
         xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
         yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, scaleanchor="x", scaleratio=0.7),
-        plot_bgcolor="#1a1a1a",
-        paper_bgcolor="#1a1a1a",
         width=500,
         height=350,
         margin=dict(l=10, r=10, t=40, b=10),
@@ -538,12 +480,8 @@ club_filter = st.sidebar.selectbox("🏟️ Club", club_options, index=0, placeh
 # ============================================
 # MAIN CONTENT
 # ============================================
-st.markdown("""
-<div style="text-align: center;">
-    <h1>🇵🇱 Polish Footballers Abroad</h1>
-    <p style="font-size: 1.2rem; color: #888;">Track Polish footballers in the best leagues worldwide!</p>
-</div>
-""", unsafe_allow_html=True)
+# Render header
+render_header()
 
 # Tabs
 tab1, tab2, tab3, tab4 = st.tabs(["🏆 Dashboard", "🔍 Search", "⚖️ Compare", "📍 Position Zones"])
@@ -875,7 +813,7 @@ with tab3:
                             fig = go.Figure()
                             fig.add_trace(go.Scatterpolar(r=n1+[n1[0]], theta=labels+[labels[0]], fill='toself', name=p1['name'], line_color='#FF6B6B'))
                             fig.add_trace(go.Scatterpolar(r=n2+[n2[0]], theta=labels+[labels[0]], fill='toself', name=p2['name'], line_color='#4ECDC4'))
-                            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,100])), height=400, paper_bgcolor='#1a1a1a', font=dict(color='white'))
+                            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,100])), height=400)
                             st.plotly_chart(fig, use_container_width=True)
 
                             # Bar
@@ -883,7 +821,7 @@ with tab3:
                                 go.Bar(name=p1['name'], x=labels, y=v1, marker_color='#FF6B6B'),
                                 go.Bar(name=p2['name'], x=labels, y=v2, marker_color='#4ECDC4')
                             ])
-                            fig2.update_layout(barmode='group', height=300, paper_bgcolor='#1a1a1a', font=dict(color='white'))
+                            fig2.update_layout(barmode='group', height=300)
                             st.plotly_chart(fig2, use_container_width=True)
 
                             # Table
