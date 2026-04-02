@@ -33,7 +33,7 @@ jobs:
       - name: Run sync
         run: |
           cd backend
-          uv run python sync_full.py
+          uv run python sync_full.py --full
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
