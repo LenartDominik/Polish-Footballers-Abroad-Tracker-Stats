@@ -9,20 +9,20 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Rate limits (safe values for RapidAPI Basic plan)
+# Rate limits (safe values for RapidAPI 20k/month plan)
 # Can be overridden via environment variables
-MAX_REQUESTS_PER_MINUTE = 30
-MAX_REQUESTS_PER_HOUR = 500
-MIN_REQUEST_INTERVAL = 2.0  # Minimum seconds between requests
+MAX_REQUESTS_PER_MINUTE = 50
+MAX_REQUESTS_PER_HOUR = 1500
+MIN_REQUEST_INTERVAL = 1.0  # Minimum seconds between requests
 
 
 class RateLimiter:
     """Token bucket rate limiter with database tracking.
 
     Ensures we don't exceed RapidAPI rate limits:
-    - Max 30 requests per minute
-    - Max 500 requests per hour
-    - Minimum 2 seconds between requests
+    - Max 50 requests per minute
+    - Max 1500 requests per hour
+    - Minimum 1 second between requests
     """
 
     def __init__(self, session: AsyncSession):
