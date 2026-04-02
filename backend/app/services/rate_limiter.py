@@ -64,6 +64,8 @@ class RateLimiter:
             else:
                 wait_time = 60  # fallback: wait 1 minute
             print(f"  ⏳ Rate limit: waiting {wait_time}s (hour limit: {count}/{MAX_REQUESTS_PER_HOUR})")
+            # Commit przed długim czekaniem - zapobiega idle connection disconnect
+            await self.session.commit()
             await asyncio.sleep(wait_time)
 
         # Log request to database

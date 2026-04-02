@@ -12,6 +12,7 @@ engine = create_async_engine(
     settings.async_database_url,
     echo=settings.debug,
     pool_pre_ping=True,
+    pool_recycle=300,  # Odświeżaj połączenia co 5 minut (zapobiega idle disconnect)
     pool_size=5,
     max_overflow=10,
     connect_args={"statement_cache_size": 0},
