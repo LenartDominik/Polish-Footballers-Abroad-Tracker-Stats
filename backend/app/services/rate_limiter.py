@@ -56,7 +56,13 @@ class RateLimiter:
         hour_ago = datetime.utcnow() - timedelta(hours=1)
         count = await self._count_requests_since(hour_ago)
         if count >= MAX_REQUESTS_PER_HOUR:
-            wait_time = 3600 - (datetime.utcnow() - hour_ago).seconds
+            # Wait until oldest request falls out of 1-hour window
+            oldest = await self._get_oldest_request_since(hour_ago)
+            if oldest:
+                wait_time = 3600 - (datetime.utcnow() - oldest).total_seconds()
+                wait_time = max(1, int(wait_time))  # at least 1 second
+            else:
+                wait_time = 60  # fallback: wait 1 minute
             print(f"  ⏳ Rate limit: waiting {wait_time}s (hour limit: {count}/{MAX_REQUESTS_PER_HOUR})")
             await asyncio.sleep(wait_time)
 
@@ -79,6 +85,21 @@ class RateLimiter:
         except Exception:
             # If table doesn't exist yet, return 0
             return 0
+
+    async def _get_oldest_request_since(self, since: datetime) -> datetime | None:
+        """Get the oldest request timestamp since a given time."""
+        from app.db.models import ApiRateLimit
+
+        try:
+            result = await self.session.execute(
+                select(ApiRateLimit.timestamp)
+                .where(ApiRateLimit.timestamp >= since)
+                .order_by(ApiRateLimit.timestamp.asc())
+                .limit(1)
+            )
+            return result.scalar_one_or_none()
+        except Exception:
+            return None
 
     async def _log_request(self) -> None:
         """Log request to database for tracking."""
@@ -155,9 +176,12 @@ class InMemoryRateLimiter:
 
         # Check per-hour limit
         hour_ago = now - timedelta(hours=1)
-        hour_count = sum(1 for t in self._request_times if t > hour_ago)
-        if hour_count >= MAX_REQUESTS_PER_HOUR:
-            wait_time = 3600 - (now - hour_ago).seconds
+        hour_requests = [t for t in self._request_times if t > hour_ago]
+        if len(hour_requests) >= MAX_REQUESTS_PER_HOUR:
+            # Wait until oldest request in window expires
+            oldest = min(hour_requests)
+            wait_time = 3600 - (now - oldest).total_seconds()
+            wait_time = max(1, int(wait_time))
             print(f"  ⏳ Rate limit: waiting {wait_time}s (hour limit)")
             await asyncio.sleep(wait_time)
 
