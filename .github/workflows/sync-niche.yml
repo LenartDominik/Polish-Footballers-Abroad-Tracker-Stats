@@ -1,17 +1,15 @@
-name: Sync All (Manual)
+name: Sync Niche Leagues
 
 on:
-  # Tylko ręczne uruchomienie - dla --full sync lub debug
+  # Niedziela o 23:30 PL time (22:30 UTC)
+  schedule:
+    - cron: '30 22 * * 0'
+
+  # Ręczne uruchomienie
   workflow_dispatch:
     inputs:
-      tier:
-        description: 'Tier to sync (all = everything)'
-        required: true
-        default: 'all'
-        type: choice
-        options: [all, top, european, niche]
       full_sync:
-        description: 'Run full sync (--full flag)'
+        description: 'Run full sync instead of incremental'
         required: false
         default: false
         type: boolean
@@ -38,14 +36,13 @@ jobs:
           cd backend
           uv sync
 
-      - name: Run sync
+      - name: Run sync (niche leagues)
         run: |
           cd backend
-          ARGS="--tier ${{ github.event.inputs.tier }}"
+          ARGS="--tier niche"
           if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then
             ARGS="$ARGS --full"
           fi
-          echo "Running: uv run python sync_full.py $ARGS"
           uv run python sync_full.py $ARGS
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -58,4 +55,4 @@ jobs:
       - name: Notify on failure
         if: failure()
         run: |
-          echo "❌ Sync failed! Check the logs above."
+          echo "❌ Niche leagues sync failed! Check the logs above."

@@ -509,6 +509,77 @@ TEAMS = {
 CURRENT_SEASON = "2025/26"
 CACHE_TTL_HOURS = 24
 SYNC_INTERVAL_HOURS = 12  # Minimum time between syncs
+SMART_SKIP_DAYS = 3  # Only process matches from last N days
+
+# ── League tier classification ──────────────────────────────────────────
+# Top 10 ligi: angielska, niemiecka, francuska, włoska, hiszpańska,
+#              portugalska, holenderska, belgijska, turecka + ich pucharki
+TOP_LEAGUE_IDS = {
+    47,    # Premier League
+    54,    # Bundesliga
+    53,    # Ligue 1
+    55,    # Serie A
+    87,    # La Liga
+    61,    # Primeira Liga
+    57,    # Eredivisie
+    40,    # Belgian First Division A
+    71,    # Süper Lig
+    # Domestic cups for top leagues
+    138,   # Copa del Rey
+    139,   # Supercopa (Spain)
+    222,   # Supercoppa (Italy)
+    141,   # Coppa Italia
+    132,   # FA Cup
+    133,   # EFL Cup
+    134,   # Coupe de France
+    149,   # Belgian Cup
+    151,   # Turkish Cup
+    186,   # Taça de Portugal
+    235,   # KNVB Cup
+    97,    # Taça da Liga
+    532,   # Supertaça (Portugal)
+    209,   # DFB-Pokal
+}
+
+# European cups: CL, EL, Conference League + qualifications
+EUROPEAN_CUP_IDS = {
+    42,      # Champions League
+    73,      # Europa League
+    10216,   # Conference League
+    10611,   # Champions League Qualification
+    10613,   # Europa League Qualification
+}
+
+# Niszowe ligi: reszta (duńska, grecka, MLS, 2. Bundesliga, etc.)
+NICHE_LEAGUE_IDS = {
+    46,      # Superligaen (Denmark)
+    135,     # Super League 1 (Greece)
+    145,     # Greek Cup
+    535,     # Qatar Stars League
+    11016,   # Qatar Cup
+    11017,   # QSL Cup
+    11018,   # Amir of Qatar Cup
+    525,     # AFC Champions League Elite
+    38,      # Austrian Bundesliga
+    278,     # Austrian Cup
+    146,     # 2. Bundesliga
+    48,      # Championship
+    86,      # Serie B
+    130,     # MLS
+    9441,    # US Open Cup
+    10046,   # DBU Pokalen (Denmark)
+}
+
+
+def get_tier_for_league(league_id: int) -> str:
+    """Return tier name for a given league_id."""
+    if league_id in EUROPEAN_CUP_IDS:
+        return "european"
+    if league_id in TOP_LEAGUE_IDS:
+        return "top"
+    if league_id in NICHE_LEAGUE_IDS:
+        return "niche"
+    return "niche"  # default: treat unknown as niche
 
 
 # Competition type mapping
@@ -545,6 +616,8 @@ def parse_args():
     parser.add_argument("--player", type=int, help="Sync only specific player by rapidapi_id (e.g., 1647807 for Pietuszewski)")
     parser.add_argument("--force", action="store_true", help="Force sync, ignore cache timing")
     parser.add_argument("--gk-only", action="store_true", help="Sync only goalkeepers")
+    parser.add_argument("--tier", choices=["all", "top", "european", "niche"],
+                        default="all", help="Sync only specific tier of competitions")
     return parser.parse_args()
 
 
@@ -677,7 +750,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
         player_filter: If set, only sync these specific players (list of rapidapi_id)
     """
     print(f"\n{'='*60}")
-    print(f"SYNC: {team_info['name']} - {'FULL' if args.full else 'INCREMENTAL'}")
+    print(f"SYNC: {team_info['name']} - {'FULL' if args.full else 'INCREMENTAL'} [tier: {getattr(args, 'tier', 'all')}]")
     if player_filter:
         names = [POLISH_PLAYERS.get(pid, {}).get('name', str(pid)) for pid in player_filter]
         print(f"Player filter: {names}")
@@ -702,6 +775,13 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
             comp_name = competition["name"]
             comp_id = competition["league_id"]
             comp_type = map_competition_type(comp_name)
+
+            # Tier filtering: skip competitions not in selected tier
+            tier = getattr(args, 'tier', 'all')
+            if tier != "all":
+                comp_tier = get_tier_for_league(comp_id)
+                if comp_tier != tier:
+                    continue
 
             print(f"\n📥 {comp_name} ({comp_type})...")
 
@@ -733,6 +813,9 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
 
             # Filter: team matches + finished
             team_matches = []
+            recent_match_found = False
+            cutoff_date = datetime.utcnow() - timedelta(days=SMART_SKIP_DAYS)
+
             for m in matches:
                 if not isinstance(m, dict):
                     continue
@@ -757,9 +840,20 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                         "away_name": away.get("name"),
                     })
 
+                    # Smart skip: check if match date is recent
+                    if not recent_match_found:
+                        match_date = _extract_match_date(m)
+                        if match_date and match_date >= cutoff_date:
+                            recent_match_found = True
+
             print(f"   {team_info['name']} finished matches: {len(team_matches)}")
 
             if not team_matches:
+                continue
+
+            # Smart skip: skip lineup calls if no matches in last N days
+            if not recent_match_found and not args.full:
+                print(f"   ⏭️ Smart skip: no matches in last {SMART_SKIP_DAYS} days")
                 continue
 
             # For incremental: get last synced match_id
@@ -1197,6 +1291,39 @@ async def aggregate_to_season_total(session, player_filter: list[int] | None = N
         print(f"   {player.name}: {total['matches_total']} matches, {total['goals']}G, {total['assists']}A")
 
 
+def _extract_match_date(match: dict) -> datetime | None:
+    """Extract date from match data. Tries multiple field names from the API."""
+    # Try common date field names from RapidAPI Football
+    for field in ["date", "start_date", "timestamp", "kickoff", "datetime", "utcDate"]:
+        val = match.get(field)
+        if val:
+            try:
+                if isinstance(val, (int, float)):
+                    return datetime.utcfromtimestamp(val)
+                if isinstance(val, str):
+                    # ISO format: "2025-03-12T20:00:00" or "2025-03-12"
+                    val = val.replace("Z", "+00:00").split("+")[0].split(".")[0]
+                    return datetime.fromisoformat(val)
+            except (ValueError, OSError):
+                continue
+
+    # Check nested status object for date
+    status = match.get("status", {})
+    if isinstance(status, dict):
+        for field in ["startDate", "startTime", "kickoff"]:
+            val = status.get(field)
+            if val:
+                try:
+                    if isinstance(val, (int, float)):
+                        return datetime.utcfromtimestamp(val)
+                    if isinstance(val, str):
+                        val = val.replace("Z", "+00:00").split("+")[0].split(".")[0]
+                        return datetime.fromisoformat(val)
+                except (ValueError, OSError):
+                    continue
+    return None
+
+
 async def get_matches_by_league(league_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> list:
     """Get all matches from a league with rate limiting."""
     if limiter:
@@ -1500,12 +1627,19 @@ async def main():
     else:
         player_filter = None
         mode = "FULL" if args.full else "INCREMENTAL"
+        tier = getattr(args, 'tier', 'all')
         print("=" * 60)
-        print(f"🔄 SYNC: Polish Players ({mode})")
+        print(f"🔄 SYNC: Polish Players ({mode}) [tier: {tier}]")
         print("=" * 60)
         print(f"API Host: {API_HOST}")
         print(f"Season: {CURRENT_SEASON}")
-        print(f"Players: {[p['name'] for p in POLISH_PLAYERS.values()]}")
+        print(f"Tier: {tier}")
+        if tier != "all":
+            print(f"  TOP leagues: {[c['name'] for t in TEAMS.values() for c in t['competitions'] if c['league_id'] in TOP_LEAGUE_IDS]}")
+            print(f"  European cups: {[c['name'] for t in TEAMS.values() for c in t['competitions'] if c['league_id'] in EUROPEAN_CUP_IDS]}")
+            print(f"  Niche leagues: {[c['name'] for t in TEAMS.values() for c in t['competitions'] if c['league_id'] in NICHE_LEAGUE_IDS]}")
+        else:
+            print(f"Players: {[p['name'] for p in POLISH_PLAYERS.values()]}")
         if args.dry_run:
             print("🔍 DRY RUN MODE - No changes will be made")
         if args.force:

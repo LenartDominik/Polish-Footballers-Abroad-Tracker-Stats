@@ -1,20 +1,12 @@
-name: Sync All (Manual)
+name: Sync European Cups
 
 on:
-  # Tylko ręczne uruchomienie - dla --full sync lub debug
+  # Czwartek o 23:30 PL time (22:30 UTC) - mecze CL/EL są w wt/śr
+  schedule:
+    - cron: '30 22 * * 4'
+
+  # Ręczne uruchomienie
   workflow_dispatch:
-    inputs:
-      tier:
-        description: 'Tier to sync (all = everything)'
-        required: true
-        default: 'all'
-        type: choice
-        options: [all, top, european, niche]
-      full_sync:
-        description: 'Run full sync (--full flag)'
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   sync:
@@ -38,15 +30,10 @@ jobs:
           cd backend
           uv sync
 
-      - name: Run sync
+      - name: Run sync (european cups)
         run: |
           cd backend
-          ARGS="--tier ${{ github.event.inputs.tier }}"
-          if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then
-            ARGS="$ARGS --full"
-          fi
-          echo "Running: uv run python sync_full.py $ARGS"
-          uv run python sync_full.py $ARGS
+          uv run python sync_full.py --tier european
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -58,4 +45,4 @@ jobs:
       - name: Notify on failure
         if: failure()
         run: |
-          echo "❌ Sync failed! Check the logs above."
+          echo "❌ European cups sync failed! Check the logs above."
