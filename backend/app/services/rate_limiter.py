@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Can be overridden via environment variables
 MAX_REQUESTS_PER_MINUTE = 50
 MAX_REQUESTS_PER_HOUR = 1500
-MIN_REQUEST_INTERVAL = 1.0  # Minimum seconds between requests
+MAX_REQUESTS_PER_MONTH = 18000  # Stop at 18k (2k safety margin from 20k plan)
+MIN_REQUEST_INTERVAL = 2.0  # Minimum seconds between requests
 
 
 class RateLimiter:
@@ -22,7 +23,8 @@ class RateLimiter:
     Ensures we don't exceed RapidAPI rate limits:
     - Max 50 requests per minute
     - Max 1500 requests per hour
-    - Minimum 1 second between requests
+    - Minimum 2 seconds between requests
+    - Max 18000 requests per month (safety margin from 20k plan)
     """
 
     def __init__(self, session: AsyncSession):
@@ -68,6 +70,14 @@ class RateLimiter:
             await self.session.commit()
             await asyncio.sleep(wait_time)
 
+        # Check monthly limit
+        month_count = await self._count_monthly_requests()
+        if month_count >= MAX_REQUESTS_PER_MONTH:
+            raise RuntimeError(
+                f"Monthly API limit reached: {month_count}/{MAX_REQUESTS_PER_MONTH} requests. "
+                f"Sync stopped to protect your RapidAPI plan."
+            )
+
         # Log request to database
         await self._log_request()
         self._last_request_time = datetime.utcnow()
@@ -86,6 +96,23 @@ class RateLimiter:
             return result.scalar() or 0
         except Exception:
             # If table doesn't exist yet, return 0
+            return 0
+
+    async def _count_monthly_requests(self) -> int:
+        """Count requests made in the current calendar month."""
+        from app.db.models import ApiRateLimit
+
+        now = datetime.utcnow()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        try:
+            result = await self.session.execute(
+                select(func.count(ApiRateLimit.id)).where(
+                    ApiRateLimit.timestamp >= month_start
+                )
+            )
+            return result.scalar() or 0
+        except Exception:
             return 0
 
     async def _get_oldest_request_since(self, since: datetime) -> datetime | None:
