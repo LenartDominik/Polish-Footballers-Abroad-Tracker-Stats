@@ -527,8 +527,8 @@ def _check_api_status(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 # ── League tier classification ──────────────────────────────────────────
-# Top 10 ligi: angielska, niemiecka, francuska, włoska, hiszpańska,
-#              portugalska, holenderska, belgijska, turecka + ich pucharki
+# Top ligi: angielska, niemiecka, francuska, włoska, hiszpańska,
+#           portugalska, holenderska, belgijska, turecka, grecka + ich pucharki
 TOP_LEAGUE_IDS = {
     47,    # Premier League
     54,    # Bundesliga
@@ -539,6 +539,7 @@ TOP_LEAGUE_IDS = {
     57,    # Eredivisie
     40,    # Belgian First Division A
     71,    # Süper Lig
+    135,   # Super League 1 (Greece)
     # Domestic cups for top leagues
     138,   # Copa del Rey
     139,   # Supercopa (Spain)
@@ -554,6 +555,7 @@ TOP_LEAGUE_IDS = {
     97,    # Taça da Liga
     532,   # Supertaça (Portugal)
     209,   # DFB-Pokal
+    145,   # Greek Cup
 }
 
 # European cups: CL, EL, Conference League + qualifications
@@ -565,11 +567,9 @@ EUROPEAN_CUP_IDS = {
     10613,   # Europa League Qualification
 }
 
-# Niszowe ligi: reszta (duńska, grecka, MLS, 2. Bundesliga, etc.)
+# Niszowe ligi: reszta (duńska, MLS, 2. Bundesliga, etc.)
 NICHE_LEAGUE_IDS = {
     46,      # Superligaen (Denmark)
-    135,     # Super League 1 (Greece)
-    145,     # Greek Cup
     535,     # Qatar Stars League
     11016,   # Qatar Cup
     11017,   # QSL Cup
@@ -1123,33 +1123,79 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                     )
                     session.add(comp_stats)
 
-                # Update values
-                avg_rating = sum(stats["ratings"]) / len(stats["ratings"]) if stats["ratings"] else 0
-                comp_stats.matches_total = stats["matches_total"]
-                comp_stats.matches_started = stats["matches_started"]
-                comp_stats.matches_subbed = stats["matches_subbed"]
-                comp_stats.minutes_played = stats["minutes"]
-                comp_stats.goals = stats["goals"]
-                comp_stats.assists = stats["assists"]
-                comp_stats.yellow_cards = stats["yellow_cards"]
-                comp_stats.red_cards = stats["red_cards"]
-                comp_stats.rating = round(avg_rating, 2)
-                comp_stats.g_per90 = calculate_per_90(stats["goals"], stats["minutes"])
-                comp_stats.a_per90 = calculate_per_90(stats["assists"], stats["minutes"])
+                # Update values:
+                # --full: REPLACE (all matches reprocessed, we have complete data)
+                # incremental: ADD to existing (only new matches processed)
+                if args.full:
+                    # Full sync: overwrite with fresh data
+                    comp_stats.matches_total = stats["matches_total"]
+                    comp_stats.matches_started = stats["matches_started"]
+                    comp_stats.matches_subbed = stats["matches_subbed"]
+                    comp_stats.minutes_played = stats["minutes"]
+                    comp_stats.goals = stats["goals"]
+                    comp_stats.assists = stats["assists"]
+                    comp_stats.yellow_cards = stats["yellow_cards"]
+                    comp_stats.red_cards = stats["red_cards"]
+                    avg_rating = sum(stats["ratings"]) / len(stats["ratings"]) if stats["ratings"] else 0
+                    comp_stats.rating = round(avg_rating, 2)
+                    comp_stats.g_per90 = calculate_per_90(stats["goals"], stats["minutes"])
+                    comp_stats.a_per90 = calculate_per_90(stats["assists"], stats["minutes"])
+
+                    # GK stats: overwrite
+                    is_gk = stats["shots_on_target_against"] > 0 or stats["saves"] > 0
+                    if is_gk:
+                        comp_stats.clean_sheets = stats["clean_sheets"]
+                        comp_stats.saves = stats["saves"]
+                        comp_stats.goals_against = stats["goals_against"]
+                        comp_stats.shots_on_target_against = stats["shots_on_target_against"]
+                        if stats["shots_on_target_against"] > 0:
+                            comp_stats.save_percentage = round(
+                                stats["saves"] / stats["shots_on_target_against"] * 100, 1
+                            )
+                else:
+                    # Incremental sync: ADD new stats to existing
+                    old_minutes = int(comp_stats.minutes_played or 0)
+                    old_rating = float(comp_stats.rating or 0)
+                    old_cs = int(comp_stats.clean_sheets or 0)
+                    old_saves = int(comp_stats.saves or 0)
+                    old_ga = int(comp_stats.goals_against or 0)
+                    old_sota = int(comp_stats.shots_on_target_against or 0)
+
+                    comp_stats.matches_total = int(comp_stats.matches_total or 0) + stats["matches_total"]
+                    comp_stats.matches_started = int(comp_stats.matches_started or 0) + stats["matches_started"]
+                    comp_stats.matches_subbed = int(comp_stats.matches_subbed or 0) + stats["matches_subbed"]
+                    comp_stats.minutes_played = old_minutes + stats["minutes"]
+                    comp_stats.goals = int(comp_stats.goals or 0) + stats["goals"]
+                    comp_stats.assists = int(comp_stats.assists or 0) + stats["assists"]
+                    comp_stats.yellow_cards = int(comp_stats.yellow_cards or 0) + stats["yellow_cards"]
+                    comp_stats.red_cards = int(comp_stats.red_cards or 0) + stats["red_cards"]
+
+                    # Rating: weighted average
+                    if stats["ratings"]:
+                        total_minutes = old_minutes + stats["minutes"]
+                        if total_minutes > 0:
+                            new_avg = sum(stats["ratings"]) / len(stats["ratings"])
+                            comp_stats.rating = round(
+                                (old_rating * old_minutes + new_avg * stats["minutes"]) / total_minutes, 2
+                            )
+
+                    comp_stats.g_per90 = calculate_per_90(int(comp_stats.goals or 0), int(comp_stats.minutes_played or 0))
+                    comp_stats.a_per90 = calculate_per_90(int(comp_stats.assists or 0), int(comp_stats.minutes_played or 0))
+
+                    # GK stats: ADD to existing
+                    is_gk = stats["shots_on_target_against"] > 0 or stats["saves"] > 0
+                    if is_gk:
+                        comp_stats.clean_sheets = old_cs + stats["clean_sheets"]
+                        comp_stats.saves = old_saves + stats["saves"]
+                        comp_stats.goals_against = old_ga + stats["goals_against"]
+                        comp_stats.shots_on_target_against = old_sota + stats["shots_on_target_against"]
+                        if comp_stats.shots_on_target_against > 0:
+                            comp_stats.save_percentage = round(
+                                int(comp_stats.saves or 0) / int(comp_stats.shots_on_target_against or 0) * 100, 1
+                            )
+
                 comp_stats.updated_at = datetime.utcnow()
                 comp_stats.expires_at = datetime.utcnow() + timedelta(hours=CACHE_TTL_HOURS)
-
-                # GK stats
-                is_gk = stats["shots_on_target_against"] > 0 or stats["saves"] > 0
-                if is_gk:
-                    comp_stats.clean_sheets = stats["clean_sheets"]
-                    comp_stats.saves = stats["saves"]
-                    comp_stats.goals_against = stats["goals_against"]
-                    comp_stats.shots_on_target_against = stats["shots_on_target_against"]
-                    if stats["shots_on_target_against"] > 0:
-                        comp_stats.save_percentage = round(
-                            stats["saves"] / stats["shots_on_target_against"] * 100, 1
-                        )
 
         # Aggregate to Season Total (player_stats)
         await aggregate_to_season_total(session, player_filter)
@@ -1332,76 +1378,104 @@ def _extract_match_date(match: dict) -> datetime | None:
 
 
 async def get_matches_by_league(league_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> list:
-    """Get all matches from a league with rate limiting."""
-    if limiter:
-        await limiter.acquire()
+    """Get all matches from a league with rate limiting and retry on API failures."""
+    for attempt in range(API_RETRY_ATTEMPTS):
+        if limiter:
+            await limiter.acquire()
 
-    headers = {
-        "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": API_HOST,
-    }
+        headers = {
+            "x-rapidapi-key": API_KEY,
+            "x-rapidapi-host": API_HOST,
+        }
 
-    response = await client.get(
-        f"https://{API_HOST}/football-get-all-matches-by-league",
-        headers=headers,
-        params={"leagueid": league_id},
-    )
-    response.raise_for_status()
-    data = response.json()
-    _check_api_status(data)
+        response = await client.get(
+            f"https://{API_HOST}/football-get-all-matches-by-league",
+            headers=headers,
+            params={"leagueid": league_id},
+        )
+        response.raise_for_status()
+        data = response.json()
 
-    # Parse nested structure: response.matches
-    response_data = data.get("response", {})
-    if isinstance(response_data, dict):
-        matches = response_data.get("matches", [])
-    else:
-        matches = response_data if isinstance(response_data, list) else []
+        try:
+            _check_api_status(data)
+        except APIResponseError as e:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"  ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for league {league_id}: {e}")
+                await asyncio.sleep(delay)
+                continue
+            else:
+                print(f"  ❌ API failed after {API_RETRY_ATTEMPTS} attempts for league {league_id}: {e}")
+                raise
 
-    return matches if isinstance(matches, list) else []
+        # Parse nested structure: response.matches
+        response_data = data.get("response", {})
+        if isinstance(response_data, dict):
+            matches = response_data.get("matches", [])
+        else:
+            matches = response_data if isinstance(response_data, list) else []
+
+        return matches if isinstance(matches, list) else []
+
+    return []
 
 
 async def get_matches_by_search(team_name: str, league_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> list:
-    """Get matches from a league using search endpoint (for leagues like Supercopa) with rate limiting."""
-    if limiter:
-        await limiter.acquire()
+    """Get matches from a league using search endpoint (for leagues like Supercopa) with rate limiting and retry on API failures."""
+    for attempt in range(API_RETRY_ATTEMPTS):
+        if limiter:
+            await limiter.acquire()
 
-    headers = {
-        "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": API_HOST,
-    }
+        headers = {
+            "x-rapidapi-key": API_KEY,
+            "x-rapidapi-host": API_HOST,
+        }
 
-    response = await client.get(
-        f"https://{API_HOST}/football-matches-search",
-        headers=headers,
-        params={"search": team_name},
-    )
-    response.raise_for_status()
-    data = response.json()
-    _check_api_status(data)
+        response = await client.get(
+            f"https://{API_HOST}/football-matches-search",
+            headers=headers,
+            params={"search": team_name},
+        )
+        response.raise_for_status()
+        data = response.json()
 
-    # Parse search results
-    suggestions = data.get("response", {}).get("suggestions", [])
+        try:
+            _check_api_status(data)
+        except APIResponseError as e:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"  ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for search '{team_name}': {e}")
+                await asyncio.sleep(delay)
+                continue
+            else:
+                print(f"  ❌ API failed after {API_RETRY_ATTEMPTS} attempts for search '{team_name}': {e}")
+                raise
 
-    # Filter to only match type and specific league_id
-    matches = []
-    for s in suggestions:
-        if s.get("type") == "match" and s.get("leagueId") == league_id:
-            # Convert to same format as get_matches_by_league
-            match_data = {
-                "id": s.get("id"),
-                "home": {
-                    "id": s.get("homeTeamId"),
-                    "name": s.get("homeTeamName"),
-                },
-                "away": {
-                    "id": s.get("awayTeamId"),
-                    "name": s.get("awayTeamName"),
-                },
-                "status": s.get("status", {}),
-            }
-            matches.append(match_data)
+        # Parse search results
+        suggestions = data.get("response", {}).get("suggestions", [])
 
-    return matches
+        # Filter to only match type and specific league_id
+        matches = []
+        for s in suggestions:
+            if s.get("type") == "match" and s.get("leagueId") == league_id:
+                # Convert to same format as get_matches_by_league
+                match_data = {
+                    "id": s.get("id"),
+                    "home": {
+                        "id": s.get("homeTeamId"),
+                        "name": s.get("homeTeamName"),
+                    },
+                    "away": {
+                        "id": s.get("awayTeamId"),
+                        "name": s.get("awayTeamName"),
+                    },
+                    "status": s.get("status", {}),
+                }
+                matches.append(match_data)
+
+        return matches
+
+    return []
 
 
 async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict[str, Any]:
@@ -1441,45 +1515,71 @@ async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient, li
 
 
 async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict[str, Any]:
-    """Get match score for GK stats (goals conceded, clean sheets) with rate limiting."""
-    if limiter:
-        await limiter.acquire()
+    """Get match score for GK stats (goals conceded, clean sheets) with rate limiting and retry."""
+    for attempt in range(API_RETRY_ATTEMPTS):
+        if limiter:
+            await limiter.acquire()
 
-    headers = {
-        "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": API_HOST,
-    }
+        headers = {
+            "x-rapidapi-key": API_KEY,
+            "x-rapidapi-host": API_HOST,
+        }
 
-    response = await client.get(
-        f"https://{API_HOST}/football-get-match-score",
-        headers=headers,
-        params={"eventid": event_id},
-    )
-    response.raise_for_status()
-    data = response.json()
-    _check_api_status(data)
-    return data
+        response = await client.get(
+            f"https://{API_HOST}/football-get-match-score",
+            headers=headers,
+            params={"eventid": event_id},
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        try:
+            _check_api_status(data)
+            return data
+        except APIResponseError as e:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"      ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for match score {event_id}: {e}")
+                await asyncio.sleep(delay)
+            else:
+                print(f"      ❌ API failed after {API_RETRY_ATTEMPTS} attempts for match score {event_id}: {e}")
+                raise
+
+    raise APIResponseError(f"Match score fetch failed for event {event_id} after {API_RETRY_ATTEMPTS} attempts")
 
 
 async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict[str, Any]:
-    """Get all match stats for GK stats (shots on target, saves) with rate limiting."""
-    if limiter:
-        await limiter.acquire()
+    """Get all match stats for GK stats (shots on target, saves) with rate limiting and retry."""
+    for attempt in range(API_RETRY_ATTEMPTS):
+        if limiter:
+            await limiter.acquire()
 
-    headers = {
-        "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": API_HOST,
-    }
+        headers = {
+            "x-rapidapi-key": API_KEY,
+            "x-rapidapi-host": API_HOST,
+        }
 
-    response = await client.get(
-        f"https://{API_HOST}/football-get-match-all-stats",
-        headers=headers,
-        params={"eventid": event_id},
-    )
-    response.raise_for_status()
-    data = response.json()
-    _check_api_status(data)
-    return data
+        response = await client.get(
+            f"https://{API_HOST}/football-get-match-all-stats",
+            headers=headers,
+            params={"eventid": event_id},
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        try:
+            _check_api_status(data)
+            return data
+        except APIResponseError as e:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"      ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for match stats {event_id}: {e}")
+                await asyncio.sleep(delay)
+            else:
+                print(f"      ❌ API failed after {API_RETRY_ATTEMPTS} attempts for match stats {event_id}: {e}")
+                raise
+
+    raise APIResponseError(f"Match stats fetch failed for event {event_id} after {API_RETRY_ATTEMPTS} attempts")
 
 
 def extract_gk_match_stats(match_score_data: dict[str, Any], match_stats_data: dict[str, Any], is_home: bool) -> dict[str, Any]:
