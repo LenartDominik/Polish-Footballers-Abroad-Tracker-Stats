@@ -509,7 +509,6 @@ TEAMS = {
 CURRENT_SEASON = "2025/26"
 CACHE_TTL_HOURS = 24
 SYNC_INTERVAL_HOURS = 12  # Minimum time between syncs
-SMART_SKIP_DAYS = 3  # Only process matches from last N days
 
 # ── League tier classification ──────────────────────────────────────────
 # Top 10 ligi: angielska, niemiecka, francuska, włoska, hiszpańska,
@@ -813,8 +812,6 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
 
             # Filter: team matches + finished
             team_matches = []
-            recent_match_found = False
-            cutoff_date = datetime.utcnow() - timedelta(days=SMART_SKIP_DAYS)
 
             for m in matches:
                 if not isinstance(m, dict):
@@ -840,20 +837,9 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                         "away_name": away.get("name"),
                     })
 
-                    # Smart skip: check if match date is recent
-                    if not recent_match_found:
-                        match_date = _extract_match_date(m)
-                        if match_date and match_date >= cutoff_date:
-                            recent_match_found = True
-
             print(f"   {team_info['name']} finished matches: {len(team_matches)}")
 
             if not team_matches:
-                continue
-
-            # Smart skip: skip lineup calls if no matches in last N days
-            if not recent_match_found and not args.full:
-                print(f"   ⏭️ Smart skip: no matches in last {SMART_SKIP_DAYS} days")
                 continue
 
             # For incremental: get last synced match_id
