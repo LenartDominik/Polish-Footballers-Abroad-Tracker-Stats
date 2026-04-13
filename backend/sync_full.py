@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 # position is tracked via POLISH_PLAYERS dict
-from typing import TypedDict
+from typing import Any, TypedDict
 
 
 class PlayerMatchStats(TypedDict):
@@ -62,7 +62,7 @@ from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.db.models import Player, PlayerStats, PlayerStatsByCompetition, SyncState, SyncedMatch, PlayerHeatmapPosition
 from app.services.rapidapi import calculate_per_90
-from app.services.rate_limiter import RateLimiter, InMemoryRateLimiter, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_HOUR
+from app.services.rate_limiter import RateLimiter, InMemoryRateLimiter, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_HOUR, MAX_REQUESTS_PER_MONTH
 
 # Configuration
 API_HOST = "free-api-live-football-data.p.rapidapi.com"
@@ -509,6 +509,22 @@ TEAMS = {
 CURRENT_SEASON = "2025/26"
 CACHE_TTL_HOURS = 24
 SYNC_INTERVAL_HOURS = 12  # Minimum time between syncs
+API_RETRY_ATTEMPTS = 3  # Retry failed API responses
+API_RETRY_BASE_DELAY = 5  # Base seconds between retries (exponential: 5, 15, 45)
+
+
+class APIResponseError(Exception):
+    """Raised when RapidAPI returns status:'failed' in response body."""
+    pass
+
+
+def _check_api_status(data: dict[str, Any]) -> dict[str, Any]:
+    """Check if API response body has status:'failed'. Raise APIResponseError if so."""
+    status = data.get("status")
+    if isinstance(status, str) and status.lower() == "failed":
+        msg = data.get("message", "Unknown API error")
+        raise APIResponseError(f"API error: {msg}")
+    return data
 
 # ── League tier classification ──────────────────────────────────────────
 # Top 10 ligi: angielska, niemiecka, francuska, włoska, hiszpańska,
@@ -742,7 +758,7 @@ async def mark_match_synced(session, match_id: int, team_id: int, competition_id
     await session.execute(stmt)
 
 
-async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filter: list[int] | None = None):
+async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filter: list[int] | None = None) -> int:
     """Sync Polish players with incremental support and per-competition stats.
 
     Args:
@@ -758,7 +774,12 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
     async with httpx.AsyncClient(timeout=30.0) as client:
         # Create rate limiter
         limiter = RateLimiter(session)
+        month_used = await limiter._count_monthly_requests()
         print(f"  🔧 Rate limiter initialized (max {MAX_REQUESTS_PER_MINUTE}/min, {MAX_REQUESTS_PER_HOUR}/hour)")
+        print(f"  📊 Monthly API usage: {month_used}/{MAX_REQUESTS_PER_MONTH}")
+        if month_used >= MAX_REQUESTS_PER_MONTH:
+            print(f"  🛑 Monthly limit reached! Sync aborted.")
+            return 0
 
         # Collect stats per competition - typed defaultdict
         stats_by_competition: defaultdict[tuple[str, str, int], defaultdict[int, PlayerMatchStats]] = (
@@ -1327,6 +1348,7 @@ async def get_matches_by_league(league_id: int, client: httpx.AsyncClient, limit
     )
     response.raise_for_status()
     data = response.json()
+    _check_api_status(data)
 
     # Parse nested structure: response.matches
     response_data = data.get("response", {})
@@ -1355,6 +1377,7 @@ async def get_matches_by_search(team_name: str, league_id: int, client: httpx.As
     )
     response.raise_for_status()
     data = response.json()
+    _check_api_status(data)
 
     # Parse search results
     suggestions = data.get("response", {}).get("suggestions", [])
@@ -1381,28 +1404,43 @@ async def get_matches_by_search(team_name: str, league_id: int, client: httpx.As
     return matches
 
 
-async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict:
-    """Get lineup for a match with rate limiting."""
-    if limiter:
-        await limiter.acquire()
-
-    headers = {
-        "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": API_HOST,
-    }
-
+async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict[str, Any]:
+    """Get lineup for a match with rate limiting and retry on API failures."""
     endpoint = "football-get-hometeam-lineup" if is_home else "football-get-awayteam-lineup"
 
-    response = await client.get(
-        f"https://{API_HOST}/{endpoint}",
-        headers=headers,
-        params={"eventid": event_id},
-    )
-    response.raise_for_status()
-    return response.json()
+    for attempt in range(API_RETRY_ATTEMPTS):
+        if limiter:
+            await limiter.acquire()
+
+        headers = {
+            "x-rapidapi-key": API_KEY,
+            "x-rapidapi-host": API_HOST,
+        }
+
+        response = await client.get(
+            f"https://{API_HOST}/{endpoint}",
+            headers=headers,
+            params={"eventid": event_id},
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        try:
+            _check_api_status(data)
+            return data
+        except APIResponseError as e:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)  # 5s, 15s, 45s
+                print(f"      ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s): {e}")
+                await asyncio.sleep(delay)
+            else:
+                print(f"      ❌ API failed after {API_RETRY_ATTEMPTS} attempts: {e}")
+                raise
+
+    raise APIResponseError(f"Lineup fetch failed for event {event_id} after {API_RETRY_ATTEMPTS} attempts")
 
 
-async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict:
+async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict[str, Any]:
     """Get match score for GK stats (goals conceded, clean sheets) with rate limiting."""
     if limiter:
         await limiter.acquire()
@@ -1418,10 +1456,12 @@ async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: Rat
         params={"eventid": event_id},
     )
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    _check_api_status(data)
+    return data
 
 
-async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict:
+async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict[str, Any]:
     """Get all match stats for GK stats (shots on target, saves) with rate limiting."""
     if limiter:
         await limiter.acquire()
@@ -1437,10 +1477,12 @@ async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter:
         params={"eventid": event_id},
     )
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    _check_api_status(data)
+    return data
 
 
-def extract_gk_match_stats(match_score_data: dict, match_stats_data: dict, is_home: bool) -> dict:
+def extract_gk_match_stats(match_score_data: dict[str, Any], match_stats_data: dict[str, Any], is_home: bool) -> dict[str, Any]:
     """
     Extract goalkeeper stats from match data.
 
