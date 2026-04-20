@@ -814,22 +814,25 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                         continue
 
             # Fetch matches from API (with rate limiting)
+            matches = []
             try:
                 matches = await get_matches_by_league(comp_id, client, limiter)
                 api_calls += 1
+            except Exception as e:
+                print(f"   ⚠️ League endpoint failed: {e}")
 
-                # Fallback to search for leagues with no matches (with rate limiting)
-                if len(matches) == 0:
+            # Fallback to search when league returns no matches or failed
+            if len(matches) == 0:
+                try:
                     matches = await get_matches_by_search(
                         team_info["name"].replace("FC ", ""), comp_id, client, limiter
                     )
                     api_calls += 1
+                except Exception as e:
+                    print(f"   ❌ Search also failed: {e}")
+                    continue
 
-                print(f"   API returned {len(matches)} total matches")
-
-            except Exception as e:
-                print(f"   ❌ API error: {e}")
-                continue
+            print(f"   API returned {len(matches)} total matches")
 
             # Filter: team matches + finished
             team_matches = []
@@ -1060,17 +1063,16 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                             import traceback
                             traceback.print_exc()
 
-                    # Mark match as synced
-                    await mark_match_synced(session, event_id, team_id, comp_id)
-
                     if found_players:
+                        # Mark match as synced only when Polish player was found
+                        await mark_match_synced(session, event_id, team_id, comp_id)
                         print(f"FOUND: {', '.join(found_players)}")
-                    else:
-                        print("-")
 
-                    comp_new_matches += 1
-                    max_match_id = max(max_match_id, event_id)
-                    matches_processed += 1
+                        comp_new_matches += 1
+                        max_match_id = max(max_match_id, event_id)
+                        matches_processed += 1
+                    else:
+                        print(f"[{event_id}] no Polish players found — will retry next sync")
 
                     await asyncio.sleep(0.1)
 
@@ -1127,6 +1129,12 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                 # --full: REPLACE (all matches reprocessed, we have complete data)
                 # incremental: ADD to existing (only new matches processed)
                 if args.full:
+                    # Warning if new data has fewer matches than existing (data was likely corrupted)
+                    existing_matches = int(comp_stats.matches_total or 0)
+                    new_matches = stats["matches_total"]
+                    if new_matches < existing_matches:
+                        print(f"   ⚠️ OVERWRITE: {comp_name} new matches ({new_matches}) < existing ({existing_matches}) — correcting data")
+
                     # Full sync: overwrite with fresh data
                     comp_stats.matches_total = stats["matches_total"]
                     comp_stats.matches_started = stats["matches_started"]
@@ -1393,6 +1401,18 @@ async def get_matches_by_league(league_id: int, client: httpx.AsyncClient, limit
             headers=headers,
             params={"leagueid": league_id},
         )
+
+        # 503: retry with backoff (may be temporary rate limit)
+        if response.status_code == 503:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"   ⚠️ API 503 dla ligi {league_id}, retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s)")
+                await asyncio.sleep(delay)
+                continue
+            else:
+                print(f"   ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla ligi {league_id}")
+                return []
+
         response.raise_for_status()
         data = response.json()
 
@@ -1436,6 +1456,18 @@ async def get_matches_by_search(team_name: str, league_id: int, client: httpx.As
             headers=headers,
             params={"search": team_name},
         )
+
+        # 503: retry with backoff (may be temporary rate limit)
+        if response.status_code == 503:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"   ⚠️ API 503 dla search '{team_name}', retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s)")
+                await asyncio.sleep(delay)
+                continue
+            else:
+                print(f"   ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla search '{team_name}'")
+                return []
+
         response.raise_for_status()
         data = response.json()
 
@@ -1496,6 +1528,17 @@ async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient, li
             headers=headers,
             params={"eventid": event_id},
         )
+
+        if response.status_code == 503:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"      ⚠️ API 503 dla lineup {event_id}, retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s)")
+                await asyncio.sleep(delay)
+                continue
+            else:
+                print(f"      ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla lineup {event_id}")
+                return {}
+
         response.raise_for_status()
         data = response.json()
 
@@ -1530,6 +1573,17 @@ async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: Rat
             headers=headers,
             params={"eventid": event_id},
         )
+
+        if response.status_code == 503:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"      ⚠️ API 503 dla match score {event_id}, retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s)")
+                await asyncio.sleep(delay)
+                continue
+            else:
+                print(f"      ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla match score {event_id}")
+                return {}
+
         response.raise_for_status()
         data = response.json()
 
@@ -1564,6 +1618,17 @@ async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter:
             headers=headers,
             params={"eventid": event_id},
         )
+
+        if response.status_code == 503:
+            if attempt < API_RETRY_ATTEMPTS - 1:
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"      ⚠️ API 503 dla match stats {event_id}, retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s)")
+                await asyncio.sleep(delay)
+                continue
+            else:
+                print(f"      ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla match stats {event_id}")
+                return {}
+
         response.raise_for_status()
         data = response.json()
 
@@ -1684,9 +1749,14 @@ def parse_player_performance(player: dict, is_starter: bool) -> dict | None:
                 # Calculate minutes played (minimum 1 if subbed in at 90')
                 result["minutes"] = max(1, 90 - sub_time)
 
-    # If still 0 minutes, player didn't play
+    # If still 0 minutes, check if player has events or rating (API may lack substitutionEvents)
     if result["minutes"] == 0:
-        return None
+        has_events = bool(performance.get("events"))
+        has_rating = performance.get("rating") is not None
+        if has_events or has_rating:
+            result["minutes"] = 1  # Played but unknown exact minutes
+        else:
+            return None
 
     # Parse events (goals, assists, cards)
     events = performance.get("events", [])
@@ -1740,7 +1810,6 @@ async def main():
 
         # Override args.team to sync only this player's team
         args.team = team_id
-        args.full = True  # Force full sync for single player
 
         print("=" * 60)
         print(f"🔄 SYNC: Single Player ({player_name})")
