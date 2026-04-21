@@ -880,12 +880,12 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
             for match in team_matches:
                 event_id = int(match["event_id"]) if match["event_id"] else 0
 
-                # Incremental: skip already processed (unless --force)
-                if not args.full and not args.force and event_id <= last_match_id:
+                # Incremental: skip already processed (unless --full or --player --force)
+                if not args.full and not (player_filter and args.force) and event_id <= last_match_id:
                     continue
 
-                # Dedup: skip if already synced (unless --force)
-                if not args.full and not args.force and await is_match_synced(session, event_id, team_id):
+                # Dedup: skip if already synced (unless --full or --player --force)
+                if not args.full and not (player_filter and args.force) and await is_match_synced(session, event_id, team_id):
                     continue
 
                 is_home = match["is_home"]
@@ -1126,9 +1126,9 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                     session.add(comp_stats)
 
                 # Update values:
-                # --full: REPLACE (all matches reprocessed, we have complete data)
+                # --full or --player: REPLACE (all matches reprocessed, we have complete data)
                 # incremental: ADD to existing (only new matches processed)
-                if args.full:
+                if args.full or (player_filter and args.force):
                     # Warning if new data has fewer matches than existing (data was likely corrupted)
                     existing_matches = int(comp_stats.matches_total or 0)
                     new_matches = stats["matches_total"]
