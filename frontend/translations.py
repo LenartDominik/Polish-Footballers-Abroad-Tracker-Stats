@@ -336,7 +336,7 @@ def language_selector():
     current = st.session_state.get("lang", "pl")
 
     st.sidebar.selectbox(
-        "🌐 Language",
+        t("language"),
         options=lang_options,
         index=lang_options.index(current),
         format_func=lambda x: format_map.get(x, x),
