@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 from dotenv import load_dotenv
 
 from utils.theme import get_theme_css, render_header, COLORS
+from translations import t, language_selector, get_position_display, clean_team_name
 
 # Load environment variables
 load_dotenv()
@@ -24,6 +25,9 @@ st.set_page_config(
 
 # Apply theme CSS
 st.markdown(get_theme_css(), unsafe_allow_html=True)
+
+# Language selector (top of sidebar)
+language_selector()
 
 
 def fetch_players(
@@ -126,34 +130,31 @@ def interpret_position(x: float, y: float) -> str:
     """
     # Y interpretation
     if y < 0.35:
-        side = "Right"
+        side = t("right_side")
     elif y > 0.65:
-        side = "Left"
+        side = t("left_side")
     else:
-        side = "Center"
+        side = t("center_side")
 
     # X interpretation
     if x < 0.35:
-        depth = "Defensive"
+        depth = t("defensive")
     elif x > 0.65:
-        depth = "Attacking"
+        depth = t("attacking")
     else:
-        depth = "Midfield"
+        depth = t("midfield_zone")
 
     return f"{depth} {side}"
 
 
 def get_position_side(y: float) -> str:
-    """Get just the side (Left/Center/Right) from Y coordinate.
-
-    API convention: Y=0=RIGHT, Y=1=LEFT (from viewer perspective)
-    """
+    """Get just the side (Left/Center/Right) from Y coordinate."""
     if y < 0.35:
-        return "Right"
+        return t("right_side")
     elif y > 0.65:
-        return "Left"
+        return t("left_side")
     else:
-        return "Center"
+        return t("center_side")
 
 
 def create_heatmap_figure(positions: List[dict], player_name: str) -> go.Figure:
@@ -161,7 +162,7 @@ def create_heatmap_figure(positions: List[dict], player_name: str) -> go.Figure:
     if not positions:
         fig = go.Figure()
         fig.add_annotation(
-            text="No position data available",
+            text=t("no_position_data_available"),
             xref="paper", yref="paper",
             x=0.5, y=0.5, showarrow=False,
             font=dict(size=16, color="#888")
@@ -195,7 +196,7 @@ def create_heatmap_figure(positions: List[dict], player_name: str) -> go.Figure:
             [1, "rgba(255,0,0,0.9)"]
         ],
         showscale=True,
-        colorbar=dict(title=dict(text="Minutes", font=dict(color="#888")), tickfont=dict(color="#888")),
+        colorbar=dict(title=dict(text=t("minutes_label"), font=dict(color="#888")), tickfont=dict(color="#888")),
         hovertemplate="X: %{x:.2f}<br>Y: %{y:.2f}<br>Minutes: %{z:.0f}<extra></extra>",
     ))
 
@@ -218,7 +219,7 @@ def create_heatmap_figure(positions: List[dict], player_name: str) -> go.Figure:
 
     # Update layout
     fig.update_layout(
-        title=dict(text=f"📍 {player_name} - Position Zones"),
+        title=dict(text=f"📍 {t('position_zones_title', name=player_name)}"),
         xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
         yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, scaleanchor="x", scaleratio=0.7),
         width=500,
@@ -284,7 +285,6 @@ def get_cached_filter_options() -> dict:
 
 def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | None, is_gk: bool, details_list=None):
     """Display stats column in card style - used by both Dashboard and Search tabs."""
-    # Use dark theme colors (only theme supported)
     bg_card = COLORS['bg_card']
     text_primary = COLORS['text_primary']
     text_secondary = COLORS['text_secondary']
@@ -292,7 +292,6 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
     border_color = COLORS['border_color']
 
     with col:
-        # Card container with theme support
         st.markdown(f"""
         <div style="background-color: {bg_card}; border: 1px solid {border_color}; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
             <div style="font-size: 1.1rem; font-weight: 600; color: {text_primary}; margin-bottom: 2px;">{icon} {title}</div>
@@ -300,19 +299,17 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
         """, unsafe_allow_html=True)
 
         if stats is None:
-            st.markdown(f'<div style="color: {text_muted}; text-align: center; padding: 20px;">No data</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="color: {text_muted}; text-align: center; padding: 20px;">{t("no_data")}</div>', unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
             return
 
-        # Main stats table - DIFFERENT for GK vs Field Players
         if is_gk:
-            # Goalkeeper stats
             st.markdown(f"""
             <table style="width: 100%; border-collapse: collapse;">
                 <tr style="border-bottom: 1px solid {border_color};">
-                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Games</th>
-                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">CS</th>
-                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">GA</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">{t("games")}</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">{t("cs")}</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">{t("ga")}</th>
                 </tr>
                 <tr>
                     <td style="color: {text_primary}; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{{}}</td>
@@ -326,13 +323,12 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
                 stats.get("goals_against", 0) or 0
             ), unsafe_allow_html=True)
         else:
-            # Field player stats
             st.markdown(f"""
             <table style="width: 100%; border-collapse: collapse;">
                 <tr style="border-bottom: 1px solid {border_color};">
-                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Games</th>
-                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Goals</th>
-                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">Assists</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">{t("games")}</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">{t("goals")}</th>
+                    <th style="color: {text_muted}; font-size: 0.7rem; text-transform: uppercase; padding: 5px 0; text-align: center;">{t("assists")}</th>
                 </tr>
                 <tr>
                     <td style="color: {text_primary}; font-size: 1.4rem; font-weight: bold; padding: 8px 0; text-align: center;">{{}}</td>
@@ -346,117 +342,86 @@ def display_comp_stats(col, icon: str, title: str, subtitle: str, stats: dict | 
                 stats.get("assists", 0)
             ), unsafe_allow_html=True)
 
-        # Rating
         rating = stats.get("rating", 0)
         st.markdown(f"""
         <div style="margin-top: 8px; color: {text_muted}; font-size: 0.8rem;">
-            Rating: <span style="color: {text_primary}; font-weight: 500;">{rating:.2f}</span>
+            {t("rating")}: <span style="color: {text_primary}; font-weight: 500;">{rating:.2f}</span>
         </div>
         """, unsafe_allow_html=True)
 
-        # Details section (expandable)
         minutes = stats.get("minutes_played", 0)
         starts = stats.get("matches_started", 0)
 
-        with st.expander("📋 Details"):
+        with st.expander(t("details")):
             if is_gk:
-                # Goalkeeper details
                 saves = stats.get("saves", 0) or 0
                 save_pct = stats.get("save_percentage", 0) or 0
                 st.markdown(f"""
                 <div style="color: {text_secondary}; font-size: 0.85rem;">
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>Starts</span>
+                        <span>{t("starts")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{starts}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>Minutes</span>
+                        <span>{t("minutes")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{minutes:,}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>Saves</span>
+                        <span>{t("saves")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{saves}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>Save %</span>
+                        <span>{t("save_pct")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{save_pct:.1f}%</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                # Field player details
                 g_per90 = stats.get("g_per90", 0) or 0
                 a_per90 = stats.get("a_per90", 0) or 0
                 ga_per90 = g_per90 + a_per90
                 st.markdown(f"""
                 <div style="color: {text_secondary}; font-size: 0.85rem;">
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>Starts</span>
+                        <span>{t("starts")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{starts}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>Minutes</span>
+                        <span>{t("minutes")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{minutes:,}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>G/90</span>
+                        <span>{t("g_per90")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{g_per90:.2f}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>A/90</span>
+                        <span>{t("a_per90")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{a_per90:.2f}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                        <span>G+A/90</span>
+                        <span>{t("ga_per90")}</span>
                         <span style="color: {text_primary}; font-weight: 500;">{ga_per90:.2f}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Show competition names if multiple
             if details_list and len(details_list) > 1:
                 st.markdown(f'<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid {border_color}; color: {text_muted}; font-size: 0.75rem;">', unsafe_allow_html=True)
                 for d in details_list:
-                    st.markdown(f"• {d.get('competition_name', 'N/A')}: {d.get('matches_total', 0)} apps")
+                    st.markdown(f"• {d.get('competition_name', 'N/A')}: {d.get('matches_total', 0)} {t('apps')}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
 
-def get_position_display(position: str | None) -> str:
-    """Return position with emoji."""
-    if position == "GK":
-        return "🧤 Goalkeeper"
-    elif position in ["F", "FW", "Forward", "ST", "CF"]:
-        return "⚽ Forward"
-    elif position in ["M", "MF", "Midfielder"]:
-        return "⚽ Midfielder"
-    elif position in ["D", "DF", "Defender"]:
-        return "⚽ Defender"
-    elif position:
-        return f"⚽ {position}"
-    else:
-        return "⚽ Unknown"
-
-
-def clean_team_name(team: str | None) -> str:
-    """Clean team name - remove duplicate player name if present."""
-    if not team:
-        return "N/A"
-    # If team contains " - ", take only the part after it
-    if " - " in team:
-        return team.split(" - ", 1)[1]
-    return team
-
-
 # ============================================
 # SIDEBAR
 # ============================================
-st.sidebar.title("⚽ Polish Players Abroad")
+st.sidebar.title(t("sidebar_title"))
 st.sidebar.markdown("---")
 
 # Global filters in sidebar
-st.sidebar.subheader("Filters")
+st.sidebar.subheader(t("filters"))
 
 # Fetch filter options for autocomplete (cached)
 filter_options = get_cached_filter_options()
@@ -474,11 +439,11 @@ if "active_filter" not in st.session_state:
 
 # Player search with autocomplete
 player_names = [""] + filter_options.get("names", [])
-player_query = st.sidebar.selectbox("🔍 Search Player", player_names, index=0, placeholder="Type or select...", on_change=on_player_change)
+player_query = st.sidebar.selectbox(t("search_player"), player_names, index=0, placeholder="Type or select...", on_change=on_player_change)
 
 # Club filter - clubs where Polish players play + option to type any club
-club_options = ["All"] + filter_options.get("teams", [])
-club_filter = st.sidebar.selectbox("🏟️ Club", club_options, index=0, placeholder="Type or select...", on_change=on_club_change)
+club_options = [t("all")] + filter_options.get("teams", [])
+club_filter = st.sidebar.selectbox(t("club"), club_options, index=0, placeholder="Type or select...", on_change=on_club_change)
 
 # ============================================
 # MAIN CONTENT
@@ -487,28 +452,26 @@ club_filter = st.sidebar.selectbox("🏟️ Club", club_options, index=0, placeh
 render_header()
 
 # Tabs
-tab1, tab2, tab3, tab4 = st.tabs(["🏆 Dashboard", "🔍 Search", "⚖️ Compare", "📍 Position Zones"])
+tab1, tab2, tab3, tab4 = st.tabs([t("tab_dashboard"), t("tab_search"), t("tab_compare"), t("tab_zones")])
 
 with tab1:
     # Filters are MUTUALLY EXCLUSIVE - use whichever was last changed
     search_name = player_query if player_query else None
-    search_club = club_filter if club_filter and club_filter != "All" else None
+    search_club = club_filter if club_filter and club_filter != t("all") else None
     active_filter = st.session_state.get("active_filter")
 
     # Use the filter that was last changed
     if active_filter == "player" and search_name:
-        with st.spinner(f"Searching for '{search_name}'..."):
+        with st.spinner(t("searching_for", name=search_name)):
             players = fetch_players(name=search_name, limit=10)
     elif active_filter == "club" and search_club:
-        with st.spinner(f"Loading players from '{search_club}'..."):
+        with st.spinner(t("loading_players_from", club=search_club)):
             players = fetch_players(team=search_club, limit=20)
     elif search_name:
-        # Default to player if only player is set
-        with st.spinner(f"Searching for '{search_name}'..."):
+        with st.spinner(t("searching_for", name=search_name)):
             players = fetch_players(name=search_name, limit=10)
     elif search_club:
-        # Default to club if only club is set
-        with st.spinner(f"Loading players from '{search_club}'..."):
+        with st.spinner(t("loading_players_from", club=search_club)):
             players = fetch_players(team=search_club, limit=20)
     else:
         players = []
@@ -525,14 +488,14 @@ with tab1:
                 label = f"{p['name']} - {clean_team_name(p.get('team'))} ({pos_display})"
                 player_options[label] = p
 
-            selected = st.selectbox("Select player:", options=list(player_options.keys()), key="dashboard_player_select")
+            selected = st.selectbox(t("select_player"), options=list(player_options.keys()), key="dashboard_player_select")
             selected_player = player_options[selected]
 
         # Season hardcoded to current
         season = "2025/26"
 
         # Fetch and display detailed stats
-        with st.spinner("Loading stats..."):
+        with st.spinner(t("loading_stats")):
             detailed_stats = fetch_player_detailed_stats(selected_player["id"], season)
 
         if detailed_stats:
@@ -542,7 +505,7 @@ with tab1:
             is_gk = detailed_stats.get("player_position") == "GK"
             header_text = f"📊 {detailed_stats['player_name']}"
             if is_gk:
-                header_text += " 🧤 Goalkeeper"
+                header_text += f" {t('goalkeeper')}"
             header_text += f" - {clean_team_name(detailed_stats['player_team'])}"
             st.subheader(header_text)
 
@@ -550,44 +513,42 @@ with tab1:
             col1, col2, col3, col4 = st.columns(4)
 
             # Reuse display function from Search tab
-            display_comp_stats(col1, "🏆", "League", "2025/26", detailed_stats.get("league_stats"), is_gk)
+            display_comp_stats(col1, "🏆", t("league"), "2025/26", detailed_stats.get("league_stats"), is_gk)
 
             # Handle European or Continental stats (depending on player)
             european_list = detailed_stats.get("european_stats", [])
             continental_list = detailed_stats.get("continental_stats", [])
 
             if continental_list:
-                # Player has AFC Champions League or other continental competition
                 continental_combined = aggregate_stats_list(continental_list)
-                display_comp_stats(col2, "🌏", "AFC Champions League", "2025/26", continental_combined, is_gk, continental_list)
+                display_comp_stats(col2, "🌏", t("afc_champions_league"), "2025/26", continental_combined, is_gk, continental_list)
             else:
-                # European competitions
                 european_combined = aggregate_stats_list(european_list)
-                display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
+                display_comp_stats(col2, "🌍", t("european_cups"), "2025/26", european_combined, is_gk, european_list)
             domestic_list = detailed_stats.get("domestic_stats", [])
             domestic_combined = aggregate_stats_list(domestic_list)
-            display_comp_stats(col3, "🏆", "Domestic Cups", "2025/26", domestic_combined, is_gk, domestic_list)
+            display_comp_stats(col3, "🏆", t("domestic_cups"), "2025/26", domestic_combined, is_gk, domestic_list)
 
             total = detailed_stats.get("total")
-            total_subtitle = "Club competitions only"
-            display_comp_stats(col4, "📊", "Season Total", total_subtitle, total, is_gk)
+            total_subtitle = t("club_competitions_only")
+            display_comp_stats(col4, "📊", t("season_total"), total_subtitle, total, is_gk)
         else:
-            st.warning(f"No stats available for season {season}")
+            st.warning(t("no_stats_available", season=season))
     else:
         # Show warning based on which filter was active
         if active_filter == "player" and search_name:
-            st.warning(f'No players found for "{search_name}"')
+            st.warning(t("no_players_found", name=search_name))
         elif active_filter == "club" and search_club:
-            st.warning(f'No Polish players found in "{search_club}"')
+            st.warning(t("no_players_in_club", club=search_club))
         elif search_name:
-            st.warning(f'No players found for "{search_name}"')
+            st.warning(t("no_players_found", name=search_name))
         elif search_club:
-            st.warning(f'No Polish players found in "{search_club}"')
+            st.warning(t("no_players_in_club", club=search_club))
         else:
-            st.info("🎯 Use filters in the sidebar to search for players")
+            st.info(t("use_filters"))
 
 with tab2:
-    st.markdown('<h2 style="text-align: center;">🔍 Player Search</h2>', unsafe_allow_html=True)
+    st.markdown(f'<h2 style="text-align: center;">{t("player_search")}</h2>', unsafe_allow_html=True)
 
     # Use cached filter options
     filter_options = get_cached_filter_options()
@@ -607,10 +568,10 @@ with tab2:
     col1, col2 = st.columns([2, 1])
     with col1:
         name_options = [""] + filter_options.get("names", [])
-        search_name = st.selectbox("Name", name_options, index=0, placeholder="Select or type...", on_change=on_name_change, key="search_name_select")
+        search_name = st.selectbox(t("name"), name_options, index=0, placeholder="Select or type...", on_change=on_name_change, key="search_name_select")
     with col2:
         team_options = [""] + filter_options.get("teams", [])
-        search_team = st.selectbox("Club", team_options, index=0, placeholder="Select or type...", on_change=on_team_change, key="search_team_select")
+        search_team = st.selectbox(t("club"), team_options, index=0, placeholder="Select or type...", on_change=on_team_change, key="search_team_select")
 
     # Use only the filter that was last changed
     active_filter = st.session_state.get("search_active_filter")
@@ -622,7 +583,7 @@ with tab2:
 
     # Auto-search when any filter is set
     if search_name or search_team:
-        with st.spinner("Searching..."):
+        with st.spinner(t("searching")):
             players = fetch_players(
                 name=search_name if search_name else None,
                 team=search_team if search_team else None,
@@ -640,14 +601,14 @@ with tab2:
                     label = f"{p['name']} - {clean_team_name(p.get('team'))} ({pos_display})"
                     player_options[label] = p
 
-                selected = st.selectbox("Select player:", options=list(player_options.keys()), key="player_select")
+                selected = st.selectbox(t("select_player"), options=list(player_options.keys()), key="player_select")
                 selected_player = player_options[selected]
 
             # Season hardcoded to current
             season = "2025/26"
 
             # Fetch detailed stats
-            with st.spinner("Loading stats..."):
+            with st.spinner(t("loading_stats")):
                 detailed_stats = fetch_player_detailed_stats(selected_player["id"], season)
 
             if detailed_stats:
@@ -657,7 +618,7 @@ with tab2:
                 is_gk = detailed_stats.get("player_position") == "GK"
                 header_text = f"📊 {detailed_stats['player_name']}"
                 if is_gk:
-                    header_text += " 🧤 Goalkeeper"
+                    header_text += f" {t('goalkeeper')}"
                 header_text += f" - {clean_team_name(detailed_stats['player_team'])}"
                 st.subheader(header_text)
 
@@ -665,44 +626,42 @@ with tab2:
                 col1, col2, col3, col4 = st.columns(4)
 
                 # Display columns
-                display_comp_stats(col1, "🏆", "League Stats", "2025/26", detailed_stats.get("league_stats"), is_gk)
+                display_comp_stats(col1, "🏆", t("league_stats"), "2025/26", detailed_stats.get("league_stats"), is_gk)
 
                 # Handle European or Continental stats (depending on player)
                 european_list = detailed_stats.get("european_stats", [])
                 continental_list = detailed_stats.get("continental_stats", [])
 
                 if continental_list:
-                    # Player has AFC Champions League or other continental competition
                     continental_combined = aggregate_stats_list(continental_list)
-                    display_comp_stats(col2, "🌏", "AFC Champions League", "2025/26", continental_combined, is_gk, continental_list)
+                    display_comp_stats(col2, "🌏", t("afc_champions_league"), "2025/26", continental_combined, is_gk, continental_list)
                 else:
-                    # European competitions
                     european_combined = aggregate_stats_list(european_list)
-                    display_comp_stats(col2, "🌍", "European Cups", "2025/26", european_combined, is_gk, european_list)
+                    display_comp_stats(col2, "🌍", t("european_cups"), "2025/26", european_combined, is_gk, european_list)
 
                 domestic_list = detailed_stats.get("domestic_stats", [])
                 domestic_combined = aggregate_stats_list(domestic_list)
-                display_comp_stats(col3, "🏆", "Domestic Cups", "2025/26", domestic_combined, is_gk, domestic_list)
+                display_comp_stats(col3, "🏆", t("domestic_cups"), "2025/26", domestic_combined, is_gk, domestic_list)
 
                 total = detailed_stats.get("total")
-                total_subtitle = "Club competitions only"
-                display_comp_stats(col4, "📊", "Season Total", total_subtitle, total, is_gk)
+                total_subtitle = t("club_competitions_only")
+                display_comp_stats(col4, "📊", t("season_total"), total_subtitle, total, is_gk)
 
             else:
-                st.warning(f"No stats available for season {season}")
+                st.warning(t("no_stats_available", season=season))
         else:
-            st.warning("No players found matching criteria")
+            st.warning(t("no_players_criteria"))
     else:
-        st.info("👆 Select a filter above to search")
+        st.info(t("select_filter"))
 
 with tab3:
-    st.markdown('<h2 style="text-align: center;">⚖️ Player Comparison</h2>', unsafe_allow_html=True)
+    st.markdown(f'<h2 style="text-align: center;">{t("player_comparison")}</h2>', unsafe_allow_html=True)
 
     # Fetch all players
     all_players = fetch_players(limit=100)
 
     if not all_players:
-        st.error("⚠️ Backend not running! Start: `cd backend && uv run uvicorn app.main:app --reload --port 8000`")
+        st.error(t("backend_not_running"))
     else:
         # Create options list with position display
         player_options = {}
@@ -712,82 +671,82 @@ with tab3:
             label = f"{p['name']} - {team} ({pos_display})"
             player_options[label] = p
 
-        option_list = ["-- Select --"] + list(player_options.keys())
+        option_list = [t("select_placeholder")] + list(player_options.keys())
 
         col1, col2 = st.columns(2)
 
         with col1:
-            sel1 = st.selectbox("Player 1", option_list, key="compare_p1_final")
+            sel1 = st.selectbox(t("player_1"), option_list, key="compare_p1_final")
 
         with col2:
-            sel2 = st.selectbox("Player 2", option_list, key="compare_p2_final")
+            sel2 = st.selectbox(t("player_2"), option_list, key="compare_p2_final")
 
         # Season hardcoded to current
         season_cmp = "2025/26"
 
         # Check if players are selected
-        if sel1 != "-- Select --" and sel2 != "-- Select --":
+        if sel1 != t("select_placeholder") and sel2 != t("select_placeholder"):
             p1 = player_options[sel1]
             p2 = player_options[sel2]
 
             # Check if same player
             if p1['id'] == p2['id']:
-                st.error("❌ Cannot compare a player with themselves. Select two different players.")
+                st.error(t("cannot_compare_self"))
             elif p1.get("position") != p2.get("position") and (p1.get("position") == "GK" or p2.get("position") == "GK"):
-                st.error("❌ Cannot compare goalkeeper with field player")
+                st.error(t("cannot_compare_gk_field"))
             else:
                 gk1 = p1.get("position") == "GK"
                 gk2 = p2.get("position") == "GK"
                 is_gk = gk1
-                st.info(f"📅 {season_cmp} | {'🧤 Goalkeepers' if is_gk else '⚽ Field Players'} | 📊 League games only")
+                st.info(f"📅 {season_cmp} | {t('goalkeepers_label') if is_gk else t('field_players_label')} | {t('league_games_only')}")
 
                 # Stats
-                st.subheader("Select stats")
+                st.subheader(t("select_stats"))
                 stats = []
 
                 if is_gk:
                     x1, x2, x3 = st.columns(3)
                     with x1:
-                        c1 = st.checkbox("Saves", True)
-                        c2 = st.checkbox("Save %", True)
-                        c3 = st.checkbox("Clean Sheets", True)
+                        c1 = st.checkbox(t("saves"), True)
+                        c2 = st.checkbox(t("save_pct"), True)
+                        c3 = st.checkbox(t("clean_sheets"), True)
                     with x2:
-                        c4 = st.checkbox("Goals Against", True)
-                        c5 = st.checkbox("Penalties Saved", True)
+                        c4 = st.checkbox(t("goals_against"), True)
+                        c5 = st.checkbox(t("penalties_saved"), True)
                     with x3:
-                        c6 = st.checkbox("Matches", True)
-                        c7 = st.checkbox("Minutes", True)
+                        c6 = st.checkbox(t("matches"), True)
+                        c7 = st.checkbox(t("minutes"), True)
 
-                    if c1: stats.append(("Saves", "saves"))
-                    if c2: stats.append(("Save %", "save_percentage"))
-                    if c3: stats.append(("Clean Sheets", "clean_sheets"))
-                    if c4: stats.append(("Goals Against", "goals_against"))
-                    if c5: stats.append(("Penalties Saved", "penalties_saved"))
-                    if c6: stats.append(("Matches", "matches_total"))
-                    if c7: stats.append(("Minutes", "minutes_played"))
+                    if c1: stats.append((t("saves"), "saves"))
+                    if c2: stats.append((t("save_pct"), "save_percentage"))
+                    if c3: stats.append((t("clean_sheets"), "clean_sheets"))
+                    if c4: stats.append((t("goals_against"), "goals_against"))
+                    if c5: stats.append((t("penalties_saved"), "penalties_saved"))
+                    if c6: stats.append((t("matches"), "matches_total"))
+                    if c7: stats.append((t("minutes"), "minutes_played"))
                 else:
                     x1, x2 = st.columns(2)
                     with x1:
-                        c1 = st.checkbox("Goals", True)
-                        c2 = st.checkbox("Assists", True)
-                        c3 = st.checkbox("G/90", True)
-                        c4 = st.checkbox("A/90", True)
+                        c1 = st.checkbox(t("goals"), True)
+                        c2 = st.checkbox(t("assists"), True)
+                        c3 = st.checkbox(t("g_per90"), True)
+                        c4 = st.checkbox(t("a_per90"), True)
                     with x2:
-                        c5 = st.checkbox("Matches", True)
-                        c6 = st.checkbox("Minutes", False)
+                        c5 = st.checkbox(t("matches"), True)
+                        c6 = st.checkbox(t("minutes"), False)
 
-                    if c1: stats.append(("Goals", "goals"))
-                    if c2: stats.append(("Assists", "assists"))
-                    if c3: stats.append(("G/90", "g_per90"))
-                    if c4: stats.append(("A/90", "a_per90"))
-                    if c5: stats.append(("Matches", "matches_total"))
-                    if c6: stats.append(("Minutes", "minutes_played"))
+                    if c1: stats.append((t("goals"), "goals"))
+                    if c2: stats.append((t("assists"), "assists"))
+                    if c3: stats.append((t("g_per90"), "g_per90"))
+                    if c4: stats.append((t("a_per90"), "a_per90"))
+                    if c5: stats.append((t("matches"), "matches_total"))
+                    if c6: stats.append((t("minutes"), "minutes_played"))
 
-                if st.button("📊 Compare", type="primary"):
+                if st.button(t("compare_btn"), type="primary"):
                     if not stats:
-                        st.warning("Select stats")
+                        st.warning(t("select_stats"))
                     else:
-                        with st.spinner("Loading..."):
+                        with st.spinner(t("searching")):
                             s1 = fetch_player_detailed_stats(p1["id"], season_cmp)
                             s2 = fetch_player_detailed_stats(p2["id"], season_cmp)
 
@@ -797,8 +756,8 @@ with tab3:
 
                             labels = [x[0] for x in stats]
                             keys = [x[1] for x in stats]
-                            v1 = [t1.get(k, 0) or 0 for k in keys]
-                            v2 = [t2.get(k, 0) or 0 for k in keys]
+                            v1 = [float(t1.get(k, 0) or 0) for k in keys]
+                            v2 = [float(t2.get(k, 0) or 0) for k in keys]
 
                             st.markdown(f"### {p1['name']} vs {p2['name']}")
 
@@ -830,21 +789,22 @@ with tab3:
                             # Table
                             st.dataframe({"Stat": labels, p1['name']: v1, p2['name']: v2}, hide_index=True)
                         else:
-                            st.warning("No data")
+                            st.warning(t("no_data_compare"))
         else:
-            st.info("👆 Select two players from the lists above")
+            st.info(t("select_two_players"))
 
 # ============================================
 # TAB 4: HEATMAPS
 # ============================================
 with tab4:
-    st.markdown('<h2 style="text-align: center;">📍 Position Zones</h2>', unsafe_allow_html=True)
+    st.markdown(f'<h2 style="text-align: center;">{t("tab_zones")}</h2>', unsafe_allow_html=True)
 
     # Premium badge
-    st.markdown("""
+    premium_text = t("premium_feature")
+    st.markdown(f"""
     <div style="text-align: center; margin-bottom: 20px;">
         <span style="background: linear-gradient(90deg, #FFD700, #FFA500); color: #000; padding: 4px 12px;
-                     border-radius: 12px; font-weight: bold; font-size: 0.8rem;">⭐ PREMIUM FEATURE</span>
+                     border-radius: 12px; font-weight: bold; font-size: 0.8rem;">{premium_text}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -852,13 +812,13 @@ with tab4:
     all_players = fetch_players(limit=100)
 
     if not all_players:
-        st.error("⚠️ Backend not running! Start: `cd backend && uv run uvicorn app.main:app --reload --port 8000`")
+        st.error(t("backend_not_running"))
     else:
         # Filter out goalkeepers for heatmap selection
         field_players = [p for p in all_players if p.get("position") != "GK"]
 
         if not field_players:
-            st.warning("No field players available for heatmap visualization")
+            st.warning(t("no_field_players"))
         else:
             # Player selection
             player_options = {}
@@ -869,7 +829,7 @@ with tab4:
                 player_options[label] = p
 
             selected = st.selectbox(
-                "Select player:",
+                t("select_player_label"),
                 options=list(player_options.keys()),
                 key="heatmap_player_select"
             )
@@ -878,24 +838,24 @@ with tab4:
             season = "2025/26"
 
             # Fetch heatmap data
-            with st.spinner("Loading position data..."):
+            with st.spinner(t("loading_position_data")):
                 heatmap_data = fetch_player_heatmap(selected_player["id"], season)
 
             if heatmap_data and heatmap_data.get("positions"):
                 st.markdown("---")
 
                 # Legend for users
-                st.info("""
-                **📊 How to read Position Zones:**
-                - **Red zones** = player spent most time in this area
-                - **Multiple zones** = player played different tactical roles across matches
-                - **X=0** = own goal | **X=1** = opponent's goal (attack direction)
-                - **Y=0** = right sideline | **Y=1** = left sideline
+                st.info(f"""
+                {t('how_to_read_title')}
+                {t('red_zones_desc')}
+                {t('multiple_zones_desc')}
+                {t('x_axis_desc')}
+                {t('y_axis_desc')}
 
-                **⚠️ Why fewer matches than expected?**
-                - Only matches with **position data available** from API are shown
-                - Some matches don't have detailed lineup/position data
-                - This is **not** all matches played, only matches with zone data
+                {t('fewer_matches_title')}
+                {t('fewer_matches_api')}
+                {t('fewer_matches_detail')}
+                {t('fewer_matches_note')}
                 """)
 
                 # Player header
@@ -912,28 +872,27 @@ with tab4:
                 # Stats summary
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Matches", heatmap_data["total_matches"])
+                    st.metric(t("matches"), heatmap_data["total_matches"])
                 with col2:
                     total_minutes = sum(p.get("minutes_played", 0) for p in heatmap_data["positions"])
-                    st.metric("Total Minutes", total_minutes)
+                    st.metric(t("total_minutes"), total_minutes)
                 with col3:
                     avg_pos = heatmap_data.get("avg_position", {})
                     if avg_pos:
                         position_text = interpret_position(avg_pos.get('x', 0.5), avg_pos.get('y', 0.5))
-                        st.metric("Avg Position", position_text)
+                        st.metric(t("avg_position"), position_text)
                         st.caption(f"({avg_pos.get('x', 0):.2f}, {avg_pos.get('y', 0):.2f})")
                     else:
-                        st.metric("Avg Position", "N/A")
+                        st.metric(t("avg_position"), "N/A")
                 with col4:
-                    # Position side breakdown
                     positions = heatmap_data.get("positions", [])
                     left_count = sum(1 for p in positions if p.get('pos_y', 0.5) > 0.65)
                     center_count = sum(1 for p in positions if 0.35 <= p.get('pos_y', 0.5) <= 0.65)
                     right_count = sum(1 for p in positions if p.get('pos_y', 0.5) < 0.35)
-                    st.metric("Side Breakdown", f"L:{left_count} C:{center_count} R:{right_count}")
+                    st.metric(t("side_breakdown"), f"L:{left_count} C:{center_count} R:{right_count}")
 
                 # Match breakdown expander
-                with st.expander(f"📋 {heatmap_data['total_matches']} matches with zone data"):
+                with st.expander(f"📋 {heatmap_data['total_matches']} {t('matches_with_zone')}"):
                     for pos in heatmap_data["positions"][:10]:  # Show first 10
                         comp_icon = "🏆" if pos.get("competition_type") == "league" else "🌍" if pos.get("competition_type") == "european" else "🏅"
                         position_text = interpret_position(pos['pos_x'], pos['pos_y'])
@@ -944,27 +903,24 @@ with tab4:
                             f"{pos.get('minutes_played', 0)} min"
                         )
                     if heatmap_data["total_matches"] > 10:
-                        st.markdown(f"*...and {heatmap_data['total_matches'] - 10} more matches*")
+                        st.markdown(t("and_more_matches", count=heatmap_data['total_matches'] - 10))
             else:
                 st.info(f"""
-                📍 No position data available for **{selected_player['name']}** yet.
+                {t('no_position_data', name=selected_player['name'])}
 
-                Run sync to collect position data:
-                ```
-                cd backend && uv run python sync_full.py
-                ```
+                {t('sync_instruction')}
                 """)
 
 # ============================================
 # LEGEND
 # ============================================
-with st.expander("📊 Stats Legend"):
-    st.markdown("""
-    - **G/90**: Goals per 90 minutes - allows comparing players with different minutes played.
-    - **A/90**: Assists per 90 minutes.
-    - **G+A/90**: Goals + Assists per 90 minutes.
-    - **CS (Goalkeepers)**: Clean Sheets - matches without conceding a goal.
-    - **GA (Goalkeepers)**: Goals Against - goals conceded.
-    - **Save% (Goalkeepers)**: Percentage of shots saved.
-    - **Rating**: Average match rating (1-10).
+with st.expander(t("stats_legend")):
+    st.markdown(f"""
+    {t('legend_g90')}
+    {t('legend_a90')}
+    {t('legend_ga90')}
+    {t('legend_cs')}
+    {t('legend_ga')}
+    {t('legend_save_pct')}
+    {t('legend_rating')}
     """)

@@ -11,8 +11,11 @@ import requests
 import sys
 sys.path.append('..')
 from utils.theme import get_theme_css, render_header, apply_plotly_theme
+from translations import t, language_selector
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
+
+language_selector()
 
 st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
 
@@ -20,7 +23,7 @@ st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
 st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # Render header
-render_header("Dashboard", "📊")
+render_header(t("tab_dashboard").lstrip("🏆 "), "📊")
 
 # Season hardcoded to current
 season = "2025/26"
@@ -46,29 +49,29 @@ if data:
     # KPIs
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Players in DB", len(df))
+        st.metric(t("players_in_db"), len(df))
     with col2:
-        st.metric("Total Goals", df["goals"].sum() if "goals" in df else 0)
+        st.metric(t("total_goals"), df["goals"].sum() if "goals" in df else 0)
     with col3:
-        st.metric("Avg xG/90", f"{df['xg_per90'].mean():.2f}" if "xg_per90" in df else "N/A")
+        st.metric(t("avg_xg90"), f"{df['xg_per90'].mean():.2f}" if "xg_per90" in df else "N/A")
     with col4:
-        st.metric("Total Assists", df["assists"].sum() if "assists" in df else 0)
+        st.metric(t("total_assists"), df["assists"].sum() if "assists" in df else 0)
 
     st.markdown("---")
 
     # Charts
-    tab1, tab2, tab3 = st.tabs(["Goals", "xG/90", "Assists"])
+    tab1, tab2, tab3 = st.tabs([t("goals"), "xG/90", t("assists")])
 
     with tab1:
         fig = px.bar(
             df.nlargest(15, "goals") if "goals" in df else df,
             x="player_name",
             y="goals",
-            title="Top 15 Scorers",
+            title=t("top_scorers"),
             color="goals",
             color_continuous_scale="Reds",
         )
-        fig = apply_plotly_theme(fig, dark_mode)
+        fig = apply_plotly_theme(fig)
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
@@ -77,10 +80,10 @@ if data:
             x="xg_per90",
             y="goals",
             hover_data=["player_name"],
-            title="xG/90 vs Goals (min 500 minutes)",
-            labels={"xg_per90": "xG/90", "goals": "Goals"},
+            title=t("xg_vs_goals"),
+            labels={"xg_per90": "xG/90", "goals": t("goals")},
         )
-        fig = apply_plotly_theme(fig, dark_mode)
+        fig = apply_plotly_theme(fig)
         st.plotly_chart(fig, use_container_width=True)
 
     with tab3:
@@ -88,12 +91,12 @@ if data:
             df.nlargest(15, "assists") if "assists" in df else df,
             x="player_name",
             y="assists",
-            title="Top 15 Assist Providers",
+            title=t("top_assisters"),
             color="assists",
             color_continuous_scale="Greens",
         )
-        fig = apply_plotly_theme(fig, dark_mode)
+        fig = apply_plotly_theme(fig)
         st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.info("No data - start backend and check API connection")
+    st.info(t("no_data_dashboard"))

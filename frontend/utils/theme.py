@@ -160,12 +160,14 @@ def get_theme_css() -> str:
 
 def render_header(page_title: str = "", page_icon: str = "") -> None:
     """Render consistent header across all pages."""
+    from translations import t
+
     title = f"{page_icon} {page_title}" if page_icon else page_title
 
     st.markdown(f"""
     <div class="app-header">
-        <h1>🇵🇱 Polish Footballers Abroad</h1>
-        <p class="subtitle">Track Polish footballers in the best leagues worldwide!</p>
+        <h1>🇵🇱 {t('app_title')}</h1>
+        <p class="subtitle">{t('app_subtitle')}</p>
     </div>
     <hr class="theme-divider">
     {f'<h2 class="section-title">{title}</h2>' if title else ''}

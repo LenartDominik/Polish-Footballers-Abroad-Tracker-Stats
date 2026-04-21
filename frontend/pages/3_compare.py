@@ -8,35 +8,11 @@ import requests
 import sys
 sys.path.append('..')
 from utils.theme import get_theme_css, render_header, apply_plotly_theme, get_chart_colors
+from translations import t, language_selector, get_position_display, clean_team_name
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
-
-def get_position_display(position: str | None) -> str:
-    """Return position with emoji."""
-    if position == "GK":
-        return "🧤 Goalkeeper"
-    elif position in ["F", "FW", "Forward", "ST", "CF"]:
-        return "⚽ Forward"
-    elif position in ["M", "MF", "Midfielder"]:
-        return "⚽ Midfielder"
-    elif position in ["D", "DF", "Defender"]:
-        return "⚽ Defender"
-    elif position:
-        return f"⚽ {position}"
-    else:
-        return "⚽ Unknown"
-
-
-def clean_team_name(team: str | None) -> str:
-    """Clean team name - remove duplicate player name if present."""
-    if not team:
-        return "N/A"
-    # If team contains " - ", take only the part after it
-    if " - " in team:
-        return team.split(" - ", 1)[1]
-    return team
-
+language_selector()
 
 st.set_page_config(page_title="Compare", page_icon="⚖️", layout="wide")
 
@@ -44,7 +20,7 @@ st.set_page_config(page_title="Compare", page_icon="⚖️", layout="wide")
 st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # Render header
-render_header("Player Comparison", "⚖️")
+render_header(t("player_comparison").lstrip("⚖️ "), "⚖️")
 
 
 def fetch_players(name=None, limit=100):
@@ -74,7 +50,7 @@ def fetch_detailed_stats(player_id, season):
 all_players = fetch_players(limit=100)
 
 if not all_players:
-    st.error("⚠️ Backend not running! Start: `cd backend && uv run uvicorn app.main:app --reload --port 8000`")
+    st.error(t("backend_not_running"))
     st.stop()
 
 # Create options list with position display
@@ -85,85 +61,82 @@ for p in all_players:
     label = f"{p['name']} - {team} ({pos_display})"
     player_options[label] = p
 
-option_list = ["-- Select --"] + list(player_options.keys())
+option_list = [t("select_placeholder")] + list(player_options.keys())
 
 col1, col2 = st.columns(2)
 
 with col1:
-    sel1 = st.selectbox("Player 1", option_list, key="cmp_p1")
+    sel1 = st.selectbox(t("player_1"), option_list, key="cmp_p1")
 
 with col2:
-    sel2 = st.selectbox("Player 2", option_list, key="cmp_p2")
+    sel2 = st.selectbox(t("player_2"), option_list, key="cmp_p2")
 
 # Season hardcoded to current
 season_cmp = "2025/26"
 
 # Check if players are selected
-if sel1 != "-- Select --" and sel2 != "-- Select --":
+if sel1 != t("select_placeholder") and sel2 != t("select_placeholder"):
     p1 = player_options[sel1]
     p2 = player_options[sel2]
 
     # Check if same player
     if p1['id'] == p2['id']:
-        st.error("❌ Cannot compare a player with themselves. Select two different players.")
+        st.error(t("cannot_compare_self"))
     elif p1.get("position") != p2.get("position") and (p1.get("position") == "GK" or p2.get("position") == "GK"):
-        gk1 = p1.get("position") == "GK"
-        gk2 = p2.get("position") == "GK"
-        st.error("❌ Cannot compare goalkeeper with field player")
+        st.error(t("cannot_compare_gk_field"))
     else:
         gk1 = p1.get("position") == "GK"
-        gk2 = p2.get("position") == "GK"
         is_gk = gk1
-        is_gk = gk1
-        st.info(f"📅 {season_cmp} | {'🧤 Goalkeepers' if is_gk else '⚽ Field Players'} | 📊 League games only")
+        gk_label = t("goalkeepers_label") if is_gk else t("field_players_label")
+        st.info(f"📅 {season_cmp} | {gk_label} | {t('league_games_only')}")
 
         # Stats
-        st.subheader("Select stats")
+        st.subheader(t("select_stats"))
         stats = []
 
         if is_gk:
             x1, x2, x3 = st.columns(3)
             with x1:
-                c1 = st.checkbox("Saves", True)
-                c2 = st.checkbox("Save %", True)
-                c3 = st.checkbox("Clean Sheets", True)
+                c1 = st.checkbox(t("saves"), True)
+                c2 = st.checkbox(t("save_pct"), True)
+                c3 = st.checkbox(t("clean_sheets"), True)
             with x2:
-                c4 = st.checkbox("Goals Against", True)
-                c5 = st.checkbox("Penalties Saved", True)
+                c4 = st.checkbox(t("goals_against"), True)
+                c5 = st.checkbox(t("penalties_saved"), True)
             with x3:
-                c6 = st.checkbox("Matches", True)
-                c7 = st.checkbox("Minutes", True)
+                c6 = st.checkbox(t("matches"), True)
+                c7 = st.checkbox(t("minutes"), True)
 
-            if c1: stats.append(("Saves", "saves"))
-            if c2: stats.append(("Save %", "save_percentage"))
-            if c3: stats.append(("Clean Sheets", "clean_sheets"))
-            if c4: stats.append(("Goals Against", "goals_against"))
-            if c5: stats.append(("Penalties Saved", "penalties_saved"))
-            if c6: stats.append(("Matches", "matches_total"))
-            if c7: stats.append(("Minutes", "minutes_played"))
+            if c1: stats.append((t("saves"), "saves"))
+            if c2: stats.append((t("save_pct"), "save_percentage"))
+            if c3: stats.append((t("clean_sheets"), "clean_sheets"))
+            if c4: stats.append((t("goals_against"), "goals_against"))
+            if c5: stats.append((t("penalties_saved"), "penalties_saved"))
+            if c6: stats.append((t("matches"), "matches_total"))
+            if c7: stats.append((t("minutes"), "minutes_played"))
         else:
             x1, x2 = st.columns(2)
             with x1:
-                c1 = st.checkbox("Goals", True)
-                c2 = st.checkbox("Assists", True)
-                c3 = st.checkbox("G/90", True)
-                c4 = st.checkbox("A/90", True)
+                c1 = st.checkbox(t("goals"), True)
+                c2 = st.checkbox(t("assists"), True)
+                c3 = st.checkbox(t("g_per90"), True)
+                c4 = st.checkbox(t("a_per90"), True)
             with x2:
-                c5 = st.checkbox("Matches", True)
-                c6 = st.checkbox("Minutes", False)
+                c5 = st.checkbox(t("matches"), True)
+                c6 = st.checkbox(t("minutes"), False)
 
-            if c1: stats.append(("Goals", "goals"))
-            if c2: stats.append(("Assists", "assists"))
-            if c3: stats.append(("G/90", "g_per90"))
-            if c4: stats.append(("A/90", "a_per90"))
-            if c5: stats.append(("Matches", "matches_total"))
-            if c6: stats.append(("Minutes", "minutes_played"))
+            if c1: stats.append((t("goals"), "goals"))
+            if c2: stats.append((t("assists"), "assists"))
+            if c3: stats.append((t("g_per90"), "g_per90"))
+            if c4: stats.append((t("a_per90"), "a_per90"))
+            if c5: stats.append((t("matches"), "matches_total"))
+            if c6: stats.append((t("minutes"), "minutes_played"))
 
-        if st.button("📊 Compare", type="primary"):
+        if st.button(t("compare_btn"), type="primary"):
             if not stats:
-                st.warning("Select stats")
+                st.warning(t("select_stats"))
             else:
-                with st.spinner("Loading..."):
+                with st.spinner(t("loading_stats")):
                     s1 = fetch_detailed_stats(p1["id"], season_cmp)
                     s2 = fetch_detailed_stats(p2["id"], season_cmp)
 
@@ -189,7 +162,6 @@ if sel1 != "-- Select --" and sel2 != "-- Select --":
                             n1.append(float((a/mx) * 100))
                             n2.append(float((b/mx) * 100))
 
-                    # Get colors
                     color1, color2 = get_chart_colors()
 
                     fig = go.Figure()
@@ -226,6 +198,6 @@ if sel1 != "-- Select --" and sel2 != "-- Select --":
                     # Table
                     st.dataframe({"Stat": labels, p1['name']: v1, p2['name']: v2}, hide_index=True)
                 else:
-                    st.warning("No data")
+                    st.warning(t("no_data_compare"))
 else:
-    st.info("👆 Select two players from the lists above")
+    st.info(t("select_two_players"))

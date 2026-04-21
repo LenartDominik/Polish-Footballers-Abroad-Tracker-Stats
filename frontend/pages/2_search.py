@@ -3,41 +3,16 @@
 import os
 
 import streamlit as st
-import pandas as pd
 import requests
 
 import sys
 sys.path.append('..')
 from utils.theme import get_theme_css, render_header
+from translations import t, language_selector, get_position_display, clean_team_name
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
-
-def get_position_display(position: str | None) -> str:
-    """Return position with emoji."""
-    if position == "GK":
-        return "🧤 Goalkeeper"
-    elif position in ["F", "FW", "Forward", "ST", "CF"]:
-        return "⚽ Forward"
-    elif position in ["M", "MF", "Midfielder"]:
-        return "⚽ Midfielder"
-    elif position in ["D", "DF", "Defender"]:
-        return "⚽ Defender"
-    elif position:
-        return f"⚽ {position}"
-    else:
-        return "⚽ Unknown"
-
-
-def clean_team_name(team: str | None) -> str:
-    """Clean team name - remove duplicate player name if present."""
-    if not team:
-        return "N/A"
-    # If team contains " - ", take only the part after it
-    if " - " in team:
-        return team.split(" - ", 1)[1]
-    return team
-
+language_selector()
 
 st.set_page_config(page_title="Search", page_icon="🔍", layout="wide")
 
@@ -45,22 +20,22 @@ st.set_page_config(page_title="Search", page_icon="🔍", layout="wide")
 st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # Render header
-render_header("Player Search", "🔍")
+render_header(t("player_search").lstrip("🔍 "), "🔍")
 
 # Search form
 col1, col2 = st.columns([2, 2])
 with col1:
-    name = st.text_input("Name", placeholder="e.g. Lewandowski, Szczesny...")
+    name = st.text_input(t("name"), placeholder=t("name_placeholder"))
 with col2:
-    team = st.text_input("Club", placeholder="e.g. Barcelona, Juventus...")
+    team = st.text_input(t("club").lstrip("🏟️ "), placeholder=t("club_placeholder"))
 
-limit = st.slider("Max results", 5, 100, 20)
+limit = st.slider(t("max_results"), 5, 100, 20)
 
-if st.button("🔍 Search", type="primary"):
+if st.button(t("search_btn"), type="primary"):
     if not any([name, team]):
-        st.warning("Enter at least one search criteria")
+        st.warning(t("enter_criteria"))
     else:
-        with st.spinner("Searching..."):
+        with st.spinner(t("searching")):
             try:
                 params = {"limit": limit}
                 if name:
@@ -73,9 +48,8 @@ if st.button("🔍 Search", type="primary"):
                 players = response.json()
 
                 if players:
-                    st.success(f"Found {len(players)} players")
+                    st.success(t("found_players", count=len(players)))
 
-                    # Display with position
                     for p in players:
                         pos_display = get_position_display(p.get("position"))
                         team_name = clean_team_name(p.get("team"))
@@ -87,7 +61,7 @@ if st.button("🔍 Search", type="primary"):
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.info("No players found matching criteria")
+                    st.info(t("no_players_criteria"))
 
             except requests.RequestException as e:
-                st.error(f"API connection error: {e}")
+                st.error(t("api_error", error=e))
