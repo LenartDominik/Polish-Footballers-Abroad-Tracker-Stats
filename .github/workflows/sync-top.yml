@@ -1,9 +1,9 @@
 name: Sync Top Leagues
 
 on:
-  # Niedziela o 23:00 PL time (22:00 UTC)
+  # Niedziela o 23:50 PL time (21:50 UTC)
   schedule:
-    - cron: '0 22 * * 0'
+    - cron: '50 21 * * 0'
 
   # Ręczne uruchomienie
   workflow_dispatch:

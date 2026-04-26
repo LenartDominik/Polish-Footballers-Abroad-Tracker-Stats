@@ -1,9 +1,9 @@
 name: Sync Niche Leagues
 
 on:
-  # Niedziela o 23:30 PL time (22:30 UTC)
+  # Poniedziałek o 03:00 PL time (01:00 UTC)
   schedule:
-    - cron: '30 22 * * 0'
+    - cron: '0 1 * * 1'
 
   # Ręczne uruchomienie
   workflow_dispatch:
