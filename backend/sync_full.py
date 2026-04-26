@@ -509,8 +509,8 @@ TEAMS = {
 CURRENT_SEASON = "2025/26"
 CACHE_TTL_HOURS = 24
 SYNC_INTERVAL_HOURS = 12  # Minimum time between syncs
-API_RETRY_ATTEMPTS = 3  # Retry failed API responses
-API_RETRY_BASE_DELAY = 5  # Base seconds between retries (exponential: 5, 15, 45)
+API_RETRY_ATTEMPTS = 5  # Retry failed API responses
+API_RETRY_BASE_DELAY = 10  # Base seconds between retries (exponential: 10, 30, 90, 270, 810)
 
 
 class APIResponseError(Exception):
@@ -1426,7 +1426,7 @@ async def get_matches_by_league(league_id: int, client: httpx.AsyncClient, limit
                 continue
             else:
                 print(f"  ❌ API failed after {API_RETRY_ATTEMPTS} attempts for league {league_id}: {e}")
-                raise
+                return []
 
         # Parse nested structure: response.matches
         response_data = data.get("response", {})
@@ -1481,7 +1481,7 @@ async def get_matches_by_search(team_name: str, league_id: int, client: httpx.As
                 continue
             else:
                 print(f"  ❌ API failed after {API_RETRY_ATTEMPTS} attempts for search '{team_name}': {e}")
-                raise
+                return []
 
         # Parse search results
         suggestions = data.get("response", {}).get("suggestions", [])
@@ -1547,14 +1547,14 @@ async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient, li
             return data
         except APIResponseError as e:
             if attempt < API_RETRY_ATTEMPTS - 1:
-                delay = API_RETRY_BASE_DELAY * (3 ** attempt)  # 5s, 15s, 45s
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)  # 10s, 30s, 90s, ...
                 print(f"      ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s): {e}")
                 await asyncio.sleep(delay)
             else:
                 print(f"      ❌ API failed after {API_RETRY_ATTEMPTS} attempts: {e}")
-                raise
+                return {}
 
-    raise APIResponseError(f"Lineup fetch failed for event {event_id} after {API_RETRY_ATTEMPTS} attempts")
+    return {}
 
 
 async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict[str, Any]:
@@ -1597,9 +1597,9 @@ async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: Rat
                 await asyncio.sleep(delay)
             else:
                 print(f"      ❌ API failed after {API_RETRY_ATTEMPTS} attempts for match score {event_id}: {e}")
-                raise
+                return {}
 
-    raise APIResponseError(f"Match score fetch failed for event {event_id} after {API_RETRY_ATTEMPTS} attempts")
+    return {}
 
 
 async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter: RateLimiter | None = None) -> dict[str, Any]:
@@ -1642,9 +1642,9 @@ async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter:
                 await asyncio.sleep(delay)
             else:
                 print(f"      ❌ API failed after {API_RETRY_ATTEMPTS} attempts for match stats {event_id}: {e}")
-                raise
+                return {}
 
-    raise APIResponseError(f"Match stats fetch failed for event {event_id} after {API_RETRY_ATTEMPTS} attempts")
+    return {}
 
 
 def extract_gk_match_stats(match_score_data: dict[str, Any], match_stats_data: dict[str, Any], is_home: bool) -> dict[str, Any]:
