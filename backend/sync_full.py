@@ -509,8 +509,8 @@ TEAMS = {
 CURRENT_SEASON = "2025/26"
 CACHE_TTL_HOURS = 24
 SYNC_INTERVAL_HOURS = 12  # Minimum time between syncs
-API_RETRY_ATTEMPTS = 5  # Retry failed API responses
-API_RETRY_BASE_DELAY = 10  # Base seconds between retries (exponential: 10, 30, 90, 270, 810)
+API_RETRY_ATTEMPTS = 3  # Retry failed API responses
+API_RETRY_BASE_DELAY = 5  # Base seconds between retries (exponential: 5, 15, 45)
 
 
 class APIResponseError(Exception):
