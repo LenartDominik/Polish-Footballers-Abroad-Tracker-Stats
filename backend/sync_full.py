@@ -612,7 +612,7 @@ def map_competition_type(competition_name: str) -> str:
 
     # Domestic cups (national cups, supercups)
     # Note: "cup" is a common suffix for domestic cups
-    if any(x in name_lower for x in ["copa del rey", "supercopa", "coppa italia", "copa", "taça", "taca", "qsl", "amir", "dfb-pokal", "pokal"]):
+    if any(x in name_lower for x in ["copa del rey", "supercopa", "coppa italia", "copa", "coupe", "taça", "taca", "qsl", "amir", "dfb-pokal", "pokal"]):
         return "domestic"
     # Also match "cup" but NOT "league cup" variations that are actually leagues
     if "cup" in name_lower and "league" not in name_lower and "stars" not in name_lower:
