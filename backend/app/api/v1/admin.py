@@ -2,10 +2,11 @@
 
 import subprocess
 import asyncio
+import os
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ SYNC_SCRIPT = BACKEND_DIR / "sync_full.py"
 @router.post("/admin/sync")
 async def trigger_sync(
     player_id: int = None,
+    x_secret_key: str = Header(...),
     db: AsyncSession = Depends(get_db)
 ):
     """Trigger sync with logging.
@@ -31,6 +33,11 @@ async def trigger_sync(
     Args:
         player_id: Optional RapidAPI player ID to sync single player
     """
+    # Verify API key
+    expected = os.environ.get("SECRET_KEY", "")
+    if not expected or x_secret_key != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     # Create sync log
     sync_log = SyncLog(
         sync_type="single" if player_id else "scheduled",
@@ -60,16 +67,13 @@ async def trigger_sync(
         if result.returncode != 0:
             raise Exception(f"Sync failed: {result.stderr or result.stdout}")
 
-        # Parse output to get players updated (simple regex)
+        # Parse output to get matches processed
         output = result.stdout
         players_updated = 0
-        for line in output.split("\n"):
-            if "players updated" in line.lower() or "updated" in line.lower():
-                # Try to extract number
-                import re
-                match = re.search(r'(\d+)', line)
-                if match:
-                    players_updated = int(match.group(1))
+        import re
+        match = re.search(r'SYNC COMPLETE:\s*(\d+)\s*matches processed', output)
+        if match:
+            players_updated = int(match.group(1))
 
         # Update log on success
         sync_log.status = "success"

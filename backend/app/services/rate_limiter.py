@@ -27,8 +27,8 @@ class RateLimiter:
     - Max 18000 requests per month (safety margin from 20k plan)
     """
 
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self, session_factory=None):
+        self._session_factory = session_factory
         self._last_request_time: datetime | None = None
         self._request_count = 0  # Local counter for logging
 
@@ -66,8 +66,6 @@ class RateLimiter:
             else:
                 wait_time = 60  # fallback: wait 1 minute
             print(f"  ⏳ Rate limit: waiting {wait_time}s (hour limit: {count}/{MAX_REQUESTS_PER_HOUR})")
-            # Commit przed długim czekaniem - zapobiega idle connection disconnect
-            await self.session.commit()
             await asyncio.sleep(wait_time)
 
         # Check monthly limit
@@ -83,19 +81,25 @@ class RateLimiter:
         self._last_request_time = datetime.utcnow()
         self._request_count += 1
 
+    async def _with_session(self):
+        """Get a session context manager."""
+        if self._session_factory is None:
+            raise RuntimeError("No session factory configured")
+        return self._session_factory()
+
     async def _count_requests_since(self, since: datetime) -> int:
         """Count requests made since a given timestamp."""
         from app.db.models import ApiRateLimit
 
         try:
-            result = await self.session.execute(
-                select(func.count(ApiRateLimit.id)).where(
-                    ApiRateLimit.timestamp >= since
+            async with self._session_factory() as session:
+                result = await session.execute(
+                    select(func.count(ApiRateLimit.id)).where(
+                        ApiRateLimit.timestamp >= since
+                    )
                 )
-            )
-            return result.scalar() or 0
+                return result.scalar() or 0
         except Exception:
-            # If table doesn't exist yet, return 0
             return 0
 
     async def _count_monthly_requests(self) -> int:
@@ -106,12 +110,13 @@ class RateLimiter:
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         try:
-            result = await self.session.execute(
-                select(func.count(ApiRateLimit.id)).where(
-                    ApiRateLimit.timestamp >= month_start
+            async with self._session_factory() as session:
+                result = await session.execute(
+                    select(func.count(ApiRateLimit.id)).where(
+                        ApiRateLimit.timestamp >= month_start
+                    )
                 )
-            )
-            return result.scalar() or 0
+                return result.scalar() or 0
         except Exception:
             return 0
 
@@ -120,13 +125,14 @@ class RateLimiter:
         from app.db.models import ApiRateLimit
 
         try:
-            result = await self.session.execute(
-                select(ApiRateLimit.timestamp)
-                .where(ApiRateLimit.timestamp >= since)
-                .order_by(ApiRateLimit.timestamp.asc())
-                .limit(1)
-            )
-            return result.scalar_one_or_none()
+            async with self._session_factory() as session:
+                result = await session.execute(
+                    select(ApiRateLimit.timestamp)
+                    .where(ApiRateLimit.timestamp >= since)
+                    .order_by(ApiRateLimit.timestamp.asc())
+                    .limit(1)
+                )
+                return result.scalar_one_or_none()
         except Exception:
             return None
 
@@ -135,13 +141,12 @@ class RateLimiter:
         from app.db.models import ApiRateLimit
 
         try:
-            log = ApiRateLimit(timestamp=datetime.utcnow())
-            self.session.add(log)
-            await self.session.commit()
+            async with self._session_factory() as session:
+                log = ApiRateLimit(timestamp=datetime.utcnow())
+                session.add(log)
+                await session.commit()
         except Exception as e:
-            # If table doesn't exist, just skip logging
             print(f"  ⚠️ Could not log request: {e}")
-            await self.session.rollback()
 
     async def cleanup_old_logs(self, hours: int = 2) -> int:
         """Remove old log entries (older than specified hours).
@@ -151,14 +156,15 @@ class RateLimiter:
         from app.db.models import ApiRateLimit
 
         try:
-            cutoff = datetime.utcnow() - timedelta(hours=hours)
-            result = await self.session.execute(
-                ApiRateLimit.__table__.delete().where(
-                    ApiRateLimit.timestamp < cutoff
+            async with self._session_factory() as session:
+                cutoff = datetime.utcnow() - timedelta(hours=hours)
+                result = await session.execute(
+                    ApiRateLimit.__table__.delete().where(
+                        ApiRateLimit.timestamp < cutoff
+                    )
                 )
-            )
-            await self.session.commit()
-            return result.rowcount
+                await session.commit()
+                return result.rowcount
         except Exception:
             return 0
 

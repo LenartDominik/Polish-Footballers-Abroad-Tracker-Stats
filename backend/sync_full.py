@@ -772,8 +772,8 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
     print(f"{'='*60}")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        # Create rate limiter
-        limiter = RateLimiter(session)
+        # Create rate limiter with its own session factory
+        limiter = RateLimiter(AsyncSessionLocal)
         month_used = await limiter._count_monthly_requests()
         print(f"  🔧 Rate limiter initialized (max {MAX_REQUESTS_PER_MINUTE}/min, {MAX_REQUESTS_PER_HOUR}/hour)")
         print(f"  📊 Monthly API usage: {month_used}/{MAX_REQUESTS_PER_MONTH}")
@@ -805,8 +805,8 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
 
             print(f"\n📥 {comp_name} ({comp_type})...")
 
-            # Check sync state for incremental
-            if not args.full and not args.force:
+            # Check sync state for incremental (--player always skips cache)
+            if not args.full and not args.force and not player_filter:
                 sync_state = await get_sync_state(session, team_id, comp_id)
                 if sync_state and sync_state.next_sync_at:
                     if datetime.utcnow() < sync_state.next_sync_at:
@@ -880,12 +880,12 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
             for match in team_matches:
                 event_id = int(match["event_id"]) if match["event_id"] else 0
 
-                # Incremental: skip already processed (unless --full or --player --force)
-                if not args.full and not (player_filter and args.force) and event_id <= last_match_id:
+                # Incremental: skip already processed (unless --full or --player)
+                if not args.full and not player_filter and event_id <= last_match_id:
                     continue
 
-                # Dedup: skip if already synced (unless --full or --player --force)
-                if not args.full and not (player_filter and args.force) and await is_match_synced(session, event_id, team_id):
+                # Dedup: skip if already synced (unless --full or --player)
+                if not args.full and not player_filter and await is_match_synced(session, event_id, team_id):
                     continue
 
                 is_home = match["is_home"]
@@ -1128,7 +1128,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                 # Update values:
                 # --full or --player: REPLACE (all matches reprocessed, we have complete data)
                 # incremental: ADD to existing (only new matches processed)
-                if args.full or (player_filter and args.force):
+                if args.full or player_filter:
                     # Warning if new data has fewer matches than existing (data was likely corrupted)
                     existing_matches = int(comp_stats.matches_total or 0)
                     new_matches = stats["matches_total"]
@@ -1413,12 +1413,11 @@ async def get_matches_by_league(league_id: int, client: httpx.AsyncClient, limit
                 print(f"   ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla ligi {league_id}")
                 return []
 
-        response.raise_for_status()
-        data = response.json()
-
         try:
+            response.raise_for_status()
+            data = response.json()
             _check_api_status(data)
-        except APIResponseError as e:
+        except (httpx.HTTPStatusError, APIResponseError) as e:
             if attempt < API_RETRY_ATTEMPTS - 1:
                 delay = API_RETRY_BASE_DELAY * (3 ** attempt)
                 print(f"  ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for league {league_id}: {e}")
@@ -1468,12 +1467,11 @@ async def get_matches_by_search(team_name: str, league_id: int, client: httpx.As
                 print(f"   ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla search '{team_name}'")
                 return []
 
-        response.raise_for_status()
-        data = response.json()
-
         try:
+            response.raise_for_status()
+            data = response.json()
             _check_api_status(data)
-        except APIResponseError as e:
+        except (httpx.HTTPStatusError, APIResponseError) as e:
             if attempt < API_RETRY_ATTEMPTS - 1:
                 delay = API_RETRY_BASE_DELAY * (3 ** attempt)
                 print(f"  ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for search '{team_name}': {e}")
@@ -1539,19 +1537,18 @@ async def get_lineup(event_id: int, is_home: bool, client: httpx.AsyncClient, li
                 print(f"      ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla lineup {event_id}")
                 return {}
 
-        response.raise_for_status()
-        data = response.json()
-
         try:
+            response.raise_for_status()
+            data = response.json()
             _check_api_status(data)
             return data
-        except APIResponseError as e:
+        except (httpx.HTTPStatusError, APIResponseError) as e:
             if attempt < API_RETRY_ATTEMPTS - 1:
-                delay = API_RETRY_BASE_DELAY * (3 ** attempt)  # 10s, 30s, 90s, ...
-                print(f"      ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s): {e}")
+                delay = API_RETRY_BASE_DELAY * (3 ** attempt)
+                print(f"      ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for lineup {event_id}: {e}")
                 await asyncio.sleep(delay)
             else:
-                print(f"      ❌ API failed after {API_RETRY_ATTEMPTS} attempts: {e}")
+                print(f"      ❌ API failed after {API_RETRY_ATTEMPTS} attempts for lineup {event_id}: {e}")
                 return {}
 
     return {}
@@ -1584,13 +1581,12 @@ async def get_match_score(event_id: int, client: httpx.AsyncClient, limiter: Rat
                 print(f"      ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla match score {event_id}")
                 return {}
 
-        response.raise_for_status()
-        data = response.json()
-
         try:
+            response.raise_for_status()
+            data = response.json()
             _check_api_status(data)
             return data
-        except APIResponseError as e:
+        except (httpx.HTTPStatusError, APIResponseError) as e:
             if attempt < API_RETRY_ATTEMPTS - 1:
                 delay = API_RETRY_BASE_DELAY * (3 ** attempt)
                 print(f"      ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for match score {event_id}: {e}")
@@ -1629,13 +1625,12 @@ async def get_match_all_stats(event_id: int, client: httpx.AsyncClient, limiter:
                 print(f"      ❌ API 503 po {API_RETRY_ATTEMPTS} próbach dla match stats {event_id}")
                 return {}
 
-        response.raise_for_status()
-        data = response.json()
-
         try:
+            response.raise_for_status()
+            data = response.json()
             _check_api_status(data)
             return data
-        except APIResponseError as e:
+        except (httpx.HTTPStatusError, APIResponseError) as e:
             if attempt < API_RETRY_ATTEMPTS - 1:
                 delay = API_RETRY_BASE_DELAY * (3 ** attempt)
                 print(f"      ⚠️ API retry {attempt + 1}/{API_RETRY_ATTEMPTS} (wait {delay}s) for match stats {event_id}: {e}")
