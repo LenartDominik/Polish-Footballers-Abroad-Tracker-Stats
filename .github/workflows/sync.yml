@@ -41,12 +41,16 @@ jobs:
       - name: Run sync
         run: |
           cd backend
-          ARGS="--tier ${{ github.event.inputs.tier }}"
+          ARGS="--tier ${{ github.event.inputs.tier }} --force"
           if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then
             ARGS="$ARGS --full"
           fi
           echo "Running: uv run python sync_full.py $ARGS"
-          uv run python sync_full.py $ARGS
+          for i in 1 2 3; do
+            uv run python sync_full.py $ARGS && break
+            echo "⚠️ Attempt $i failed, retrying in 120s..."
+            sleep 120
+          done
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

@@ -39,7 +39,7 @@ jobs:
       - name: Run sync (niche leagues)
         run: |
           cd backend
-          ARGS="--tier niche"
+          ARGS="--tier niche --force"
           if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then
             ARGS="$ARGS --full"
           fi

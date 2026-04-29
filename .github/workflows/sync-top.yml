@@ -39,7 +39,7 @@ jobs:
       - name: Run sync (top leagues)
         run: |
           cd backend
-          ARGS="--tier top"
+          ARGS="--tier top --force"
           if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then
             ARGS="$ARGS --full"
           fi
