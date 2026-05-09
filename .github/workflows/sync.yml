@@ -1,7 +1,11 @@
-name: Sync All (Manual)
+name: Sync All Players
 
 on:
-  # Tylko ręczne uruchomienie - dla --full sync lub debug
+  # Niedziela o 23:50 PL time (21:50 UTC)
+  schedule:
+    - cron: '50 21 * * 0'
+
+  # Ręczne uruchomienie - dla --full sync lub debug
   workflow_dispatch:
     inputs:
       tier:
