@@ -1,11 +1,7 @@
 name: Sync Top Leagues
 
 on:
-  # Niedziela o 23:50 PL time (21:50 UTC)
-  schedule:
-    - cron: '50 21 * * 0'
-
-  # Ręczne uruchomienie
+  # Tylko ręczne uruchomienie - główny sync to sync.yml (--tier all)
   workflow_dispatch:
     inputs:
       full_sync:

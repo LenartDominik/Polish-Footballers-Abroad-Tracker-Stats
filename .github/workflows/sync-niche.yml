@@ -1,11 +1,7 @@
 name: Sync Niche Leagues
 
 on:
-  # Poniedziałek o 03:00 PL time (01:00 UTC)
-  schedule:
-    - cron: '0 1 * * 1'
-
-  # Ręczne uruchomienie
+  # Tylko ręczne uruchomienie - główny sync to sync.yml (--tier all)
   workflow_dispatch:
     inputs:
       full_sync:
