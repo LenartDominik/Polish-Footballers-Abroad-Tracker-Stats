@@ -45,7 +45,9 @@ jobs:
       - name: Run sync
         run: |
           cd backend
-          ARGS="--tier ${{ github.event.inputs.tier }} --force"
+          TIER="${{ github.event.inputs.tier }}"
+          TIER="${TIER:-all}"
+          ARGS="--tier $TIER --force"
           if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then
             ARGS="$ARGS --full"
           fi
