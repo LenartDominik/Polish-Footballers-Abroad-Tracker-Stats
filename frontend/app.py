@@ -688,6 +688,14 @@ with tab2:
 with tab3:
     st.markdown(f'<h2 style="text-align: center;">{t("player_comparison")}</h2>', unsafe_allow_html=True)
 
+    # Premium badge
+    st.markdown(f"""
+    <div style="text-align: center; margin-bottom: 20px;">
+        <span style="background: linear-gradient(90deg, #FFD700, #FFA500); color: #000; padding: 4px 12px;
+                     border-radius: 12px; font-weight: bold; font-size: 0.8rem;">{t("premium_feature")}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
     # Fetch all players
     all_players = fetch_players(limit=100)
 
@@ -952,6 +960,14 @@ with tab5:
     _WARSAW_TZ = ZoneInfo("Europe/Warsaw")
 
     st.markdown(f'<h2 style="text-align: center;">{t("tab_live")}</h2>', unsafe_allow_html=True)
+
+    # Premium badge
+    st.markdown(f"""
+    <div style="text-align: center; margin-bottom: 20px;">
+        <span style="background: linear-gradient(90deg, #FFD700, #FFA500); color: #000; padding: 4px 12px;
+                     border-radius: 12px; font-weight: bold; font-size: 0.8rem;">{t("premium_feature")}</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     live_status = fetch_live_status()
     is_live = live_status.get("is_live", False)
