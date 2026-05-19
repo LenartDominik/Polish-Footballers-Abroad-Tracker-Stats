@@ -500,7 +500,7 @@ class LivePoller:
         self._cycle_count: int = 0  # track cycles for lineup check throttling
         self._upcoming_cache: list[dict] = []  # cached upcoming matches
         self._upcoming_cache_time: Optional[datetime] = None  # when cache was set
-        self._upcoming_cache_ttl: int = 300  # 5 min — refresh upcoming list frequently enough
+        self._upcoming_cache_ttl: int = 3600  # 1 hour — upcoming matches rarely change
         self._match_added_times: dict[tuple, datetime] = {}  # (match_id, rapidapi_id) -> when added
         self._status_failures: dict[tuple, int] = {}  # (match_id, rapidapi_id) -> consecutive API failures
         self._given_up_match_ids: set[int] = set()  # match_ids removed due to API failures — don't re-add
@@ -1277,6 +1277,14 @@ class LivePoller:
         upcoming.sort(key=lambda x: x["_hours_until"])
         self._upcoming_cache = upcoming
         self._upcoming_cache_time = datetime.utcnow()
+
+        # Smart cache: expire right before the next match (min 1h)
+        if upcoming:
+            hours_to_next = upcoming[0]["_hours_until"]
+            self._upcoming_cache_ttl = max(3600, int((hours_to_next - 0.5) * 3600))
+        else:
+            self._upcoming_cache_ttl = 6 * 3600  # no matches at all — recheck in 6h
+
         return upcoming[:limit]
 
     def is_live(self) -> bool:
