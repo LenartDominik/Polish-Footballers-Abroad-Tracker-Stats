@@ -159,6 +159,45 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # Language selector label
         "language": "🌐 Language",
+
+        # Live tab
+        "tab_live": "🔴 Live",
+        "live_no_matches": "No live matches with Polish players right now",
+        "live_score": "Score",
+        "live_minute": "min",
+        "live_events": "Match Events",
+        "live_goal": "Goal",
+        "live_assist": "Assist",
+        "live_refreshing": "Auto-refreshing every 30 seconds",
+        "live_not_playing": "Not in squad",
+        "live_on_bench": "On the bench",
+        "live_lineup_starting": "in the starting lineup",
+        "live_lineup_bench": "started on the bench",
+        "live_lineup_unknown": "squad status unknown",
+        "live_subout": "Substituted off",
+        "live_subin": "Came on",
+        "live_yellow_card": "Yellow card",
+        "live_red_card": "Red card",
+        "live_data_delayed": "Data may be delayed by ~2 minutes",
+
+        # Prematch
+        "live_prematch": "KICKOFF AT {time}",
+        "live_countdown": "Starts in {minutes} min",
+        "live_prematch_label": "Lineups announced",
+        "live_squad_starting": "In starting lineup",
+        "live_squad_bench": "Started on the bench",
+        "live_squad_absent": "Not in match squad",
+
+        # Upcoming matches
+        "live_next_match": "Next match",
+        "live_upcoming": "Upcoming matches",
+        "live_tomorrow": "Tomorrow",
+        "live_today": "Today",
+        "live_no_upcoming": "No upcoming matches in the next 7 days",
+
+        # Timeline
+        "live_timeline_ht": "HT",
+        "live_timeline_bench_period": "On bench",
     },
     "pl": {
         # Header
@@ -316,6 +355,45 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # Language selector label
         "language": "🌐 Język",
+
+        # Live tab
+        "tab_live": "🔴 Na żywo",
+        "live_no_matches": "Brak meczów na żywo z polskimi piłkarzami",
+        "live_score": "Wynik",
+        "live_minute": "min",
+        "live_events": "Wydarzenia meczowe",
+        "live_goal": "Gol",
+        "live_assist": "Asysta",
+        "live_refreshing": "Auto-odświeżanie co 30 sekund",
+        "live_not_playing": "Nie w składzie",
+        "live_on_bench": "Na ławce",
+        "live_lineup_starting": "w składzie od początku",
+        "live_lineup_bench": "rozpoczął na ławce rezerwowych",
+        "live_lineup_unknown": "status składu nieznany",
+        "live_subout": "Zszedł z boiska",
+        "live_subin": "Wszedł na boisko",
+        "live_yellow_card": "Żółta kartka",
+        "live_red_card": "Czerwona kartka",
+        "live_data_delayed": "Dane mogą być opóźnione o ~2 minuty",
+
+        # Prematch
+        "live_prematch": "START O {time}",
+        "live_countdown": "Start za {minutes} min",
+        "live_prematch_label": "Składy ogłoszone",
+        "live_squad_starting": "W podstawowym składzie",
+        "live_squad_bench": "Rozpoczął na ławce rezerwowych",
+        "live_squad_absent": "Nie ma w kadrze meczowej",
+
+        # Upcoming matches
+        "live_next_match": "Następny mecz",
+        "live_upcoming": "Nadchodzące mecze",
+        "live_tomorrow": "Jutro",
+        "live_today": "Dzisiaj",
+        "live_no_upcoming": "Brak nadchodzących meczów w ciągu 7 dni",
+
+        # Timeline
+        "live_timeline_ht": "HT",
+        "live_timeline_bench_period": "Na ławce",
     },
 }
 

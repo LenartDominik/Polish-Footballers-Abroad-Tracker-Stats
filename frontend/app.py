@@ -119,7 +119,38 @@ def fetch_player_heatmap(player_id: int, season: str = "2025/26") -> Optional[di
         return None
 
 
+def fetch_live_status() -> dict:
+    """Fetch live match status."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/live/status")
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        return {"is_live": False, "matches_count": 0}
+
+
+def fetch_live_matches() -> list[dict]:
+    """Fetch current live matches with events."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/live/matches")
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        return []
+
+
+def fetch_upcoming_matches(limit: int = 5) -> list[dict]:
+    """Fetch upcoming matches with tracked Polish players."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/live/upcoming", params={"limit": limit})
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        return []
+
+
 import numpy as np
+from streamlit_autorefresh import st_autorefresh
 
 
 def interpret_position(x: float, y: float) -> str:
@@ -452,7 +483,7 @@ club_filter = st.sidebar.selectbox(t("club"), club_options, index=0, placeholder
 render_header()
 
 # Tabs
-tab1, tab2, tab3, tab4 = st.tabs([t("tab_dashboard"), t("tab_search"), t("tab_compare"), t("tab_zones")])
+tab1, tab2, tab3, tab4, tab5 = st.tabs([t("tab_dashboard"), t("tab_search"), t("tab_compare"), t("tab_zones"), t("tab_live")])
 
 with tab1:
     # Filters are MUTUALLY EXCLUSIVE - use whichever was last changed
@@ -910,6 +941,442 @@ with tab4:
 
                 {t('sync_instruction')}
                 """)
+
+# ============================================
+# TAB 5: LIVE MATCHES
+# ============================================
+with tab5:
+    from collections import OrderedDict
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    _WARSAW_TZ = ZoneInfo("Europe/Warsaw")
+
+    st.markdown(f'<h2 style="text-align: center;">{t("tab_live")}</h2>', unsafe_allow_html=True)
+
+    live_status = fetch_live_status()
+    is_live = live_status.get("is_live", False)
+    is_prematch = live_status.get("is_prematch", False)
+
+    # Choose refresh interval
+    if is_live:
+        refresh_ms = 30000
+    elif is_prematch:
+        refresh_ms = 60000
+    else:
+        refresh_ms = 300000
+    st_autorefresh(interval=refresh_ms, key="live_autorefresh")
+
+    _now_pl = datetime.now(_WARSAW_TZ).strftime("%H:%M:%S")
+    st.markdown(f'<p style="text-align:right; font-size:0.75rem; color:#94A3B8;">Ostatnia aktualizacja: {_now_pl}</p>', unsafe_allow_html=True)
+
+    live_matches = fetch_live_matches() if (is_live or is_prematch) else []
+
+    # Separate into live and prematch
+    live_grouped = OrderedDict()
+    prematch_grouped = OrderedDict()
+
+    for match in live_matches:
+        mid = match.get("match_id")
+        if match.get("status") == "prematch":
+            if mid not in prematch_grouped:
+                prematch_grouped[mid] = {"match_info": match, "players": []}
+            prematch_grouped[mid]["players"].append(match)
+        else:
+            if mid not in live_grouped:
+                live_grouped[mid] = {"match_info": match, "players": []}
+            live_grouped[mid]["players"].append(match)
+
+    # --- RENDER PREMATCH CARDS ---
+    for mid, group in prematch_grouped.items():
+        match = group["match_info"]
+        players = group["players"]
+        home = match.get('home_team', 'Home')
+        away = match.get('away_team', 'Away')
+        competition = match.get("competition", "")
+        kickoff_time = match.get("kickoff_time", "")
+
+        # Parse kickoff for display
+        kickoff_display = ""
+        countdown_text = ""
+        if kickoff_time:
+            try:
+                kickoff_dt = datetime.fromisoformat(kickoff_time.replace("Z", "+00:00"))
+                local_dt = kickoff_dt.astimezone(_WARSAW_TZ)
+                kickoff_display = local_dt.strftime("%H:%M")
+                now = datetime.now(_WARSAW_TZ)
+                diff_min = int((kickoff_dt - now).total_seconds() / 60)
+                if diff_min > 0:
+                    countdown_text = t("live_countdown").format(minutes=diff_min)
+            except (ValueError, OSError):
+                kickoff_display = ""
+
+        # Build player sections
+        all_players_html = ""
+        for player_data in players:
+            player_name = player_data.get("player_name", "")
+            lineup_status = player_data.get("lineup_status", "")
+            is_bench = lineup_status == "bench"
+
+            initials = ""
+            if player_name:
+                parts = player_name.strip().split()
+                if len(parts) >= 2:
+                    initials = (parts[0][0] + parts[-1][0]).upper()
+                elif parts:
+                    initials = parts[0][:2].upper()
+
+            if lineup_status == "starting":
+                status_color = "#22C55E"
+                status_text = t("live_squad_starting")
+                avatar_bg = "linear-gradient(135deg, #DC2626, #991B1B)"
+                text_primary = "#F1F5F9"
+            elif lineup_status == "bench":
+                status_color = "#94A3B8"
+                status_text = t("live_squad_bench")
+                avatar_bg = "linear-gradient(135deg, #4B5563, #374151)"
+                text_primary = "#94A3B8"
+            else:
+                status_color = "#64748B"
+                status_text = t("live_squad_absent")
+                avatar_bg = "linear-gradient(135deg, #64748B, #475569)"
+                text_primary = "#64748B"
+
+            if player_name:
+                all_players_html += (
+                    '<div style="margin-top: 10px; padding: 12px 16px; background: rgba(255,255,255,0.05); border-radius: 10px;">'
+                    '<div style="display: flex; align-items: center; gap: 10px;">'
+                    f'<div style="width: 36px; height: 36px; border-radius: 50%; background: {avatar_bg}; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 0.8rem; flex-shrink: 0;">{initials}</div>'
+                    '<div>'
+                    f'<div style="color: {text_primary}; font-weight: 600; font-size: 0.95rem;">{player_name}</div>'
+                    '<div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">'
+                    f'<span style="background: {status_color}; width: 7px; height: 7px; border-radius: 50%; display: inline-block;"></span>'
+                    f'<span style="color: {status_color}; font-size: 0.75rem; font-weight: 500;">{status_text}</span>'
+                    '</div></div></div></div>'
+                )
+
+        badge_text = t("live_prematch").format(time=kickoff_display) if kickoff_display else t("live_prematch_label")
+        card_html = (
+            '<div style="background: linear-gradient(135deg, #0F172A 0%, #1a150a 50%, #1E293B 100%);'
+            ' border: 1px solid rgba(245,158,11,0.25); border-radius: 12px; padding: 20px; margin-bottom: 16px; position: relative; overflow: hidden;">'
+            '<div style="position: absolute; top: -30px; right: -30px; width: 120px; height: 120px;'
+            ' background: radial-gradient(circle, rgba(245,158,11,0.2), transparent 70%); pointer-events: none;"></div>'
+            '<div style="text-align: center;">'
+            '<div style="display: flex; justify-content: center; align-items: center; gap: 20px;">'
+            f'<div style="color: #F1F5F9; font-weight: 700; font-size: 1.4rem;">{home}</div>'
+            f'<div style="font-size: 1.5rem; color: #475569; font-weight: 700;">vs</div>'
+            f'<div style="color: #F1F5F9; font-weight: 700; font-size: 1.4rem;">{away}</div>'
+            '</div>'
+            f'<div style="display: inline-block; margin-top: 6px; padding: 3px 12px; background: rgba(245,158,11,0.15); border-radius: 12px;">'
+            f'<span style="color: #F59E0B; font-size: 0.8rem; font-weight: 700;">{badge_text}</span>'
+            '</div>'
+            f'<div style="color: #F59E0B; font-size: 0.75rem; font-weight: 600; margin-top: 2px;">{countdown_text}</div>'
+            f'<div style="color: #64748B; font-size: 0.7rem; margin-top: 2px;">{competition}</div>'
+            '</div>'
+            f'{all_players_html}'
+            '</div>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
+
+    # --- RENDER LIVE CARDS ---
+    for mid, group in live_grouped.items():
+        match = group["match_info"]
+        players = group["players"]
+        home = match.get('home_team', 'Home')
+        away = match.get('away_team', 'Away')
+        home_score = match.get("home_score", 0)
+        away_score = match.get("away_score", 0)
+        minute = match.get("minute", "")
+        # Clean minute display — handle None, empty, and special values
+        if minute is None or str(minute).strip() == "" or str(minute).strip() == "None":
+            minute = ""
+        minute_display = f"{minute}'" if minute else ""
+        competition = match.get("competition", "")
+
+        any_starting = any(p.get("lineup_status") == "starting" for p in players)
+        glow_opacity = "0.3" if any_starting else "0.08"
+        border_glow = "0.3" if any_starting else "0.15"
+        score_color = "#F1F5F9" if any_starting else "#94A3B8"
+
+        # Build all player sections
+        all_players_html = ""
+        for player_data in players:
+            player_name = player_data.get("player_name", "")
+            lineup_status = player_data.get("lineup_status", "")
+            events = player_data.get("events", [])
+
+            is_bench = lineup_status == "bench"
+            text_primary = "#94A3B8" if is_bench else "#F1F5F9"
+
+            initials = ""
+            if player_name:
+                parts = player_name.strip().split()
+                if len(parts) >= 2:
+                    initials = parts[0][0] + parts[-1][0]
+                elif parts:
+                    initials = parts[0][:2]
+                initials = initials.upper()
+
+            if lineup_status == "starting":
+                status_color = "#22C55E"
+                status_text = t("live_lineup_starting")
+            elif lineup_status == "bench":
+                status_color = "#94A3B8"
+                status_text = t("live_lineup_bench")
+            else:
+                status_color = "#94A3B8"
+                status_text = t("live_squad_absent")
+
+            # --- TIMELINE (substitutions only) ---
+            timeline_html = ""
+            sub_events = [e for e in events if e.get("event_type") in ("subin", "subout") and e.get("minute")]
+
+            if sub_events or minute:
+                try:
+                    minute_clean = str(minute).replace("'", "").replace("‎", "").strip().upper()
+                    if minute_clean in ("HT", "HALF TIME", "HALFTIME"):
+                        current_min = 45
+                    elif minute_clean in ("FT", "FULL TIME", "FULLTIME", "90"):
+                        current_min = 90
+                    elif minute_clean:
+                        current_min = int(minute_clean)
+                    else:
+                        current_min = 0
+                except (ValueError, TypeError):
+                    current_min = 0
+
+                progress_pct = min(current_min / 90 * 100, 100)
+
+                markers_html = ""
+                bench_area_html = ""
+
+                for evt in sub_events:
+                    evt_min = evt.get("minute", 0)
+                    try:
+                        evt_min = int(evt_min)
+                    except (ValueError, TypeError):
+                        continue
+                    pct = evt_min / 90 * 100
+
+                    if evt.get("event_type") == "subin":
+                        markers_html += (
+                            f'<span style="position: absolute; left: {pct}%; top: 10px; transform: translateX(-50%); font-size: 0.8rem; color: #22C55E; font-weight: 700;">{evt_min}\'</span>'
+                        )
+                        # Bench area: gray from 0 to subin minute
+                        bench_area_html = (
+                            f'<div style="position: absolute; left: 0; top: -2px; height: 10px; width: {pct}%; background: rgba(100,116,139,0.15); border-radius: 3px 0 0 3px;"></div>'
+                        )
+                    elif evt.get("event_type") == "subout":
+                        markers_html += (
+                            f'<span style="position: absolute; left: {pct}%; top: 10px; transform: translateX(-50%); font-size: 0.8rem; color: #94A3B8; font-weight: 700;">{evt_min}\'</span>'
+                        )
+
+                timeline_html = (
+                    '<div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">'
+                    f'<div style="position: relative; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; margin: 20px 0 28px;">'
+                    f'{bench_area_html}'
+                    f'<div style="position: absolute; left: 0; top: 0; height: 100%; width: {progress_pct}%; background: linear-gradient(90deg, #DC2626, #F59E0B); border-radius: 3px;"></div>'
+                    f'<div style="position: absolute; left: 50%; top: -3px; height: 12px; border-left: 1px dashed rgba(255,255,255,0.12);"></div>'
+                    f'<span style="position: absolute; left: 50%; top: -16px; transform: translateX(-50%); font-size: 0.75rem; color: #CBD5E1; font-weight: 700;">{t("live_timeline_ht")}</span>'
+                    f'{markers_html}'
+                    '</div>'
+                    '<div style="display: flex; justify-content: space-between; margin-top: -24px; font-size: 0.8rem; color: #CBD5E1; font-weight: 700;">'
+                    '<span>0\'</span><span>45\'</span><span>90\'</span>'
+                    '</div>'
+                    '</div>'
+                )
+
+            # --- EVENTS LIST ---
+            events_html = ""
+            if events:
+                for event in events:
+                    event_type = event.get("event_type", "")
+                    evt_minute = event.get("minute", "")
+                    score = event.get("match_score", "")
+
+                    if event_type == "goal":
+                        icon, label, evt_color = "⚽", t("live_goal"), "#DC2626"
+                    elif event_type == "assist":
+                        icon, label, evt_color = "🅰️", t("live_assist"), "#F59E0B"
+                    elif event_type == "subout":
+                        icon, label, evt_color = "🔁", t("live_subout"), "#EF4444"
+                    elif event_type == "subin":
+                        icon, label, evt_color = "🔁", t("live_subin"), "#22C55E"
+                    elif event_type == "yellow_card":
+                        icon, label, evt_color = "🟨", t("live_yellow_card"), "#EAB308"
+                    elif event_type == "red_card":
+                        icon, label, evt_color = "🟥", t("live_red_card"), "#DC2626"
+                    else:
+                        icon, label, evt_color = "📋", event_type, "#94A3B8"
+
+                    score_str = f" → {score}" if score else ""
+                    minute_str = f"{evt_minute}'" if evt_minute and str(evt_minute) != "0" else ""
+                    events_html += (
+                        '<div style="display: flex; align-items: center; gap: 8px; padding: 4px 0;">'
+                        f'<span style="color: {evt_color}; font-size: 1.1rem;">{icon}</span>'
+                        f'<span style="color: #F1F5F9; font-weight: 600; min-width: 35px;">{minute_str}</span>'
+                        f'<span style="color: {evt_color}; font-size: 0.8rem; font-weight: 500;">{label}</span>'
+                        f'<span style="color: #64748B; font-size: 0.85rem;">{score_str}</span>'
+                        '</div>'
+                    )
+
+            if player_name:
+                avatar_bg = "linear-gradient(135deg, #4B5563, #374151)" if is_bench else "linear-gradient(135deg, #DC2626, #991B1B)"
+                events_part = ""
+                if events_html:
+                    events_part = (
+                        '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">'
+                        f'{events_html}'
+                        '</div>'
+                    )
+
+                all_players_html += (
+                    '<div style="margin-top: 14px; padding: 12px 16px; background: rgba(255,255,255,0.05); border-radius: 10px;">'
+                    '<div style="display: flex; align-items: center; gap: 10px;">'
+                    f'<div style="width: 36px; height: 36px; border-radius: 50%; background: {avatar_bg}; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 0.8rem; flex-shrink: 0;">{initials}</div>'
+                    '<div>'
+                    f'<div style="color: {text_primary}; font-weight: 600; font-size: 0.95rem;">{player_name}</div>'
+                    '<div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">'
+                    f'<span style="background: {status_color}; width: 7px; height: 7px; border-radius: 50%; display: inline-block;"></span>'
+                    f'<span style="color: {status_color}; font-size: 0.75rem; font-weight: 500;">{status_text}</span>'
+                    '</div>'
+                    '</div>'
+                    '</div>'
+                    f'{timeline_html}'
+                    f'{events_part}'
+                    '</div>'
+                )
+
+        card_html = (
+            '<div style="background: linear-gradient(135deg, #0F172A 0%, #1a0a0a 50%, #1E293B 100%);'
+            f' border: 1px solid rgba(220,38,38,{border_glow}); border-radius: 12px; padding: 20px; margin-bottom: 16px; position: relative; overflow: hidden;">'
+            '<div style="position: absolute; top: -30px; right: -30px; width: 120px; height: 120px;'
+            f' background: radial-gradient(circle, rgba(220,38,38,{glow_opacity}), transparent 70%); pointer-events: none;"></div>'
+            '<div style="display: flex; flex-direction: column; align-items: center;">'
+            '<div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; width: 100%;">'
+            f'<div style="color: #F1F5F9; font-weight: 700; font-size: 1.5rem; text-align: right;">{home}</div>'
+            f'<div style="font-size: 2.5rem; font-weight: 900; letter-spacing: 8px; color: {score_color}; text-shadow: 0 0 20px rgba(220,38,38,{glow_opacity}); text-align: center;">'
+            f'{home_score}<span style="color: #475569; margin: 0 6px;">:</span>{away_score}'
+            '</div>'
+            f'<div style="color: #F1F5F9; font-weight: 700; font-size: 1.5rem; text-align: left;">{away}</div>'
+            '</div>'
+            '<div style="margin-top: 4px; padding: 2px 10px; background: rgba(220,38,38,0.1); border-radius: 12px;">'
+            f'<span style="color: #DC2626; font-size: 0.8rem; font-weight: 700;">● LIVE {minute_display}</span>'
+            '</div>'
+            f'<div style="color: #64748B; font-size: 0.7rem; margin-top: 2px;">{competition}</div>'
+            '</div>'
+            f'{all_players_html}'
+            '</div>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
+
+    # --- NO LIVE + NO PREMATCH: SHOW INFO ---
+    if not is_live and not is_prematch:
+        st.info(t("live_no_matches"))
+
+    # --- UPCOMING MATCHES (always visible) ---
+    upcoming = fetch_upcoming_matches(limit=10)
+    if upcoming:
+        # Group by match_id
+        from collections import OrderedDict
+        grouped = OrderedDict()
+        for m in upcoming:
+            mid = m.get("match_id")
+            if mid not in grouped:
+                grouped[mid] = {"match": m, "players": []}
+            grouped[mid]["players"].append(m.get("player_name"))
+
+        grouped_list = list(grouped.values())
+
+        # Next match (highlighted)
+        next_m = grouped_list[0]["match"]
+        next_players = grouped_list[0]["players"]
+        kickoff_time = next_m.get("kickoff_time", "")
+        kickoff_display = ""
+        date_label = ""
+        if kickoff_time:
+            try:
+                kickoff_dt = datetime.fromisoformat(kickoff_time.replace("Z", "+00:00"))
+                local_dt = kickoff_dt.astimezone(_WARSAW_TZ)
+                kickoff_display = local_dt.strftime("%H:%M")
+                now = datetime.now(_WARSAW_TZ)
+                diff_days = (local_dt.date() - now.date()).days
+                if diff_days == 0:
+                    date_label = f'{t("live_today")}, {kickoff_display}'
+                elif diff_days == 1:
+                    date_label = f'{t("live_tomorrow")}, {kickoff_display}'
+                else:
+                    date_label = local_dt.strftime("%d.%m, %H:%M")
+            except (ValueError, OSError):
+                date_label = kickoff_time
+
+        players_str = ", ".join(f'<span style="color: #DC2626; font-weight: 600;">{p}</span>' for p in next_players)
+
+        comp_label = next_m.get("competition", "")
+        stage_label = next_m.get("stage", "")
+        comp_display = f"{comp_label} · {stage_label}" if comp_label and stage_label else comp_label
+
+        next_card = (
+            '<div style="max-width: 500px; margin: 20px auto; padding: 20px;'
+            ' background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">'
+            f'<div style="color: #F59E0B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">{t("live_next_match")}</div>'
+            '<div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 8px;">'
+            f'<span style="color: #F1F5F9; font-weight: 700;">{next_m.get("home_team")}</span>'
+            f'<span style="color: #475569;">vs</span>'
+            f'<span style="color: #F1F5F9; font-weight: 700;">{next_m.get("away_team")}</span>'
+            '</div>'
+            f'<div style="color: #94A3B8; font-size: 0.85rem; text-align: center;">{comp_display}</div>'
+            f'<div style="color: #94A3B8; font-size: 0.85rem; text-align: center;">{date_label}</div>'
+            f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); color: #CBD5E1; font-size: 0.8rem; text-align: center;">'
+            f'{players_str}'
+            '</div></div>'
+        )
+        st.markdown(next_card, unsafe_allow_html=True)
+
+        # Remaining upcoming matches
+        if len(grouped_list) > 1:
+            st.markdown(
+                f'<div style="max-width: 500px; margin: 16px auto 0; color: #F59E0B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 0 14px;">{t("live_upcoming")}</div>',
+                unsafe_allow_html=True,
+            )
+            for g in grouped_list[1:]:
+                m = g["match"]
+                m_players = g["players"]
+                m_kickoff = m.get("kickoff_time", "")
+                m_date = ""
+                if m_kickoff:
+                    try:
+                        m_dt = datetime.fromisoformat(m_kickoff.replace("Z", "+00:00"))
+                        m_local = m_dt.astimezone(_WARSAW_TZ)
+                        m_now = datetime.now(_WARSAW_TZ)
+                        m_diff = (m_local.date() - m_now.date()).days
+                        if m_diff == 0:
+                            m_date = f'{t("live_today")}, {m_local.strftime("%H:%M")}'
+                        elif m_diff == 1:
+                            m_date = f'{t("live_tomorrow")}, {m_local.strftime("%H:%M")}'
+                        else:
+                            m_date = m_local.strftime("%d.%m, %H:%M")
+                    except (ValueError, OSError):
+                        m_date = m_kickoff
+
+                players_str = ", ".join(m_players)
+
+                m_comp = m.get("competition", "")
+                m_stage = m.get("stage", "")
+                m_comp_display = f"{m_comp} · {m_stage}" if m_comp and m_stage else m_comp
+
+                item_html = (
+                    '<div style="max-width: 500px; margin: 0 auto 6px; display: flex; justify-content: space-between; align-items: center;'
+                    ' padding: 10px 14px; background: rgba(255,255,255,0.02); border-radius: 8px;">'
+                    '<div>'
+                    f'<div style="color: #CBD5E1; font-size: 0.85rem;">{m.get("home_team")} vs {m.get("away_team")}</div>'
+                    f'<div style="color: #64748B; font-size: 0.75rem;">{m_comp_display}</div>'
+                    f'<div style="color: #64748B; font-size: 0.75rem;">{players_str}</div>'
+                    '</div>'
+                    f'<div style="color: #94A3B8; font-size: 0.8rem;">{m_date}</div>'
+                    '</div>'
+                )
+                st.markdown(item_html, unsafe_allow_html=True)
+
 
 # ============================================
 # LEGEND

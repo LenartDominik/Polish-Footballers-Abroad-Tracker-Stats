@@ -164,6 +164,103 @@ class RapidAPIClient:
         logger.info("Polish players found", team_id=team_id, count=len(polish_players))
         return polish_players
 
+    async def get_live_matches(self) -> List[Dict[str, Any]]:
+        """Get all currently live matches."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                logger.info("Fetching live matches")
+                response = await client.get(
+                    f"{self.base_url}/football-get-all-live-matches",
+                    headers=self.headers,
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                matches = []
+                raw_list = (
+                    data.get("response", {})
+                    .get("list", data.get("response", []))
+                )
+                if isinstance(raw_list, dict):
+                    raw_list = raw_list.get("list", raw_list.get("matches", []))
+                if isinstance(raw_list, list):
+                    matches = raw_list
+
+                logger.info("Live matches fetched", count=len(matches))
+                return matches
+
+            except httpx.HTTPError as e:
+                logger.error("Failed to fetch live matches", error=str(e))
+                raise
+
+    async def get_match_score(self, event_id: int) -> Dict[str, Any]:
+        """Get match score and events by event ID."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                logger.info("Fetching match score", event_id=event_id)
+                response = await client.get(
+                    f"{self.base_url}/football-get-match-score",
+                    headers=self.headers,
+                    params={"eventid": event_id},
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                result = data.get("response", data)
+                logger.info("Match score fetched", event_id=event_id)
+                return result
+
+            except httpx.HTTPError as e:
+                logger.error("Failed to fetch match score", event_id=event_id, error=str(e))
+                raise
+
+    async def get_match_status(self, event_id: int) -> Dict[str, Any]:
+        """Get match status (minute, score, ongoing) by event ID."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                logger.info("Fetching match status", event_id=event_id)
+                response = await client.get(
+                    f"{self.base_url}/football-get-match-status",
+                    headers=self.headers,
+                    params={"eventid": event_id},
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                result = data.get("response", data)
+                logger.info("Match status fetched", event_id=event_id)
+                return result
+
+            except httpx.HTTPError as e:
+                logger.error("Failed to fetch match status", event_id=event_id, error=str(e))
+                raise
+
+    async def get_matches_by_league(self, league_id: int) -> List[Dict[str, Any]]:
+        """Get all matches from a league (fixtures + results)."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                logger.info("Fetching league matches", league_id=league_id)
+                response = await client.get(
+                    f"{self.base_url}/football-get-all-matches-by-league",
+                    headers=self.headers,
+                    params={"leagueid": league_id},
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                response_data = data.get("response", {})
+                if isinstance(response_data, dict):
+                    matches = response_data.get("matches", [])
+                else:
+                    matches = response_data if isinstance(response_data, list) else []
+
+                logger.info("League matches fetched", league_id=league_id, count=len(matches))
+                return matches
+
+            except httpx.HTTPError as e:
+                logger.error("Failed to fetch league matches", league_id=league_id, error=str(e))
+                raise
+
 
 def calculate_per_90(value: int, minutes: int) -> float:
     """Calculate per-90 statistic."""

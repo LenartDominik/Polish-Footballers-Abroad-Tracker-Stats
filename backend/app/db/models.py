@@ -268,3 +268,28 @@ class SyncLog(Base):
     players_updated: Mapped[int] = mapped_column(Integer, default=0)
     api_calls_used: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class LiveMatchEvent(Base):
+    """Live match events (goals, assists) for tracked Polish players."""
+
+    __tablename__ = "live_match_events"
+    __table_args__ = (
+        UniqueConstraint("match_id", "player_id", "event_type", "minute", name="uq_live_event_dedup"),
+        Index("idx_live_events_match", "match_id"),
+        Index("idx_live_events_player", "player_id"),
+        Index("idx_live_events_created", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    match_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    player_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("players.id", ondelete="SET NULL"))
+    player_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'goal', 'assist'
+    minute: Mapped[Optional[int]] = mapped_column(Integer)
+    match_score: Mapped[Optional[str]] = mapped_column(String(20))  # "2:1"
+    home_team: Mapped[Optional[str]] = mapped_column(String(100))
+    away_team: Mapped[Optional[str]] = mapped_column(String(100))
+    competition: Mapped[Optional[str]] = mapped_column(String(100))
+    season: Mapped[Optional[str]] = mapped_column(String(10))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

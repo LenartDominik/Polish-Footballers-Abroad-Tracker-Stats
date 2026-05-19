@@ -9,6 +9,7 @@ import structlog
 from app.core.config import settings
 from app.db.session import engine, init_db
 from app.api.v1 import api_router
+from app.services.live_poller import live_poller
 
 
 # Configure structured logging
@@ -38,17 +39,23 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
-    logger.info("Starting application", environment=settings.environment)
+    print("=== LIFESPAN: Starting application ===")
 
     # Initialize database
     await init_db()
-    logger.info("Database initialized")
+    print("=== LIFESPAN: Database initialized ===")
+
+    # Start live match poller
+    await live_poller.start()
+    print(f"=== LIFESPAN: Live poller started, is_live={live_poller.is_live()} ===")
 
     yield
 
     # Cleanup
+    await live_poller.stop()
+    print("=== LIFESPAN: Live poller stopped ===")
     await engine.dispose()
-    logger.info("Application shutdown complete")
+    print("=== LIFESPAN: Shutdown complete ===")
 
 
 app = FastAPI(
