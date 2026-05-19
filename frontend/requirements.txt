@@ -5,3 +5,5 @@ plotly>=5.24.0
 pandas>=2.2.0
 httpx>=0.28.0
 python-dotenv>=1.0.0
+streamlit-javascript>=0.1.5
+streamlit-autorefresh>=1.0.1
