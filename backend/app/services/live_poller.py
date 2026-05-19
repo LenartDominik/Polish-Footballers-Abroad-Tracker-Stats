@@ -55,24 +55,20 @@ INTERVAL_TRACKING = 120    # 2 min - live match, player playing
 INTERVAL_BENCH = 120       # 2 min - live match, player on bench
 PREMATCH_WINDOW_HOURS = 0.75  # 45 min - check lineups when kickoff within this many hours
 
-# League IDs for fixture checking - all competitions for tracked teams
-TRACKED_LEAGUE_IDS = [
-    # League
-    87,    # La Liga
-    55,    # Serie A
-    61,    # Primeira Liga
-    40,    # First Division A (Belgium)
-    # Domestic cups
-    138,   # Copa del Rey
-    141,   # Coppa Italia
-    186,   # Taça de Portugal
-    97,    # Taça da Liga
-    222,   # Supercoppa Italiana
-    149,   # Belgian Cup
-    # European
-    42,    # Champions League
-    73,    # Europa League
-]
+# Team -> league IDs mapping (only check leagues where tracked teams actually play)
+TEAM_LEAGUES: dict[str, list[int]] = {
+    "Barcelona": [87, 138, 42],       # La Liga, Copa del Rey, Champions League
+    "Inter": [55, 141, 222, 42],      # Serie A, Coppa Italia, Supercoppa, Champions League
+    "FC Porto": [61, 186],            # Primeira Liga, Taça de Portugal
+    "Gent": [40, 149],                # First Division A, Belgian Cup
+}
+
+# Auto-derived: unique league IDs for all tracked teams
+TRACKED_LEAGUE_IDS = list({
+    league_id
+    for team_name in {info["team_name"] for info in LIVE_TRACKED_PLAYERS.values()}
+    for league_id in TEAM_LEAGUES.get(team_name, [])
+})
 
 LEAGUE_NAMES: dict[int, str] = {
     87: "La Liga",
