@@ -1,7 +1,7 @@
 """Background poller for live match tracking of Polish players."""
 
 import asyncio
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 import structlog
@@ -54,6 +54,7 @@ INTERVAL_PREMATCH_KICKOFF = 60    # 1 min - kickoff passed, aggressively check i
 INTERVAL_TRACKING = 120    # 2 min - live match, player playing
 INTERVAL_BENCH = 120       # 2 min - live match, player on bench
 PREMATCH_WINDOW_HOURS = 0.75  # 45 min - check lineups when kickoff within this many hours
+PREMATCH_WAKEUP_BUFFER_HOURS = 1.0  # wake up this long before kickoff
 
 # Team -> league IDs mapping (only check leagues where tracked teams actually play)
 TEAM_LEAGUES: dict[str, list[int]] = {
@@ -561,6 +562,22 @@ class LivePoller:
                 await asyncio.sleep(sleep_chunk)
                 sleep_remaining -= sleep_chunk
 
+    def _earliest_kickoff_today(self, today_matches: dict) -> Optional[datetime]:
+        """Find earliest future kickoff from today's matches."""
+        earliest = None
+        now = datetime.utcnow()
+        for match_info in today_matches.values():
+            kickoff_str = match_info.get("kickoff_time", "")
+            if not kickoff_str:
+                continue
+            try:
+                kickoff = datetime.fromisoformat(kickoff_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                if kickoff > now and (earliest is None or kickoff < earliest):
+                    earliest = kickoff
+            except (ValueError, OSError):
+                continue
+        return earliest
+
     async def _check_fixtures_today(self) -> bool:
         """Check if any tracked team has a match today."""
         today = date.today()
@@ -687,11 +704,22 @@ class LivePoller:
                     except (ValueError, OSError):
                         pass
 
-        # 4. Handle prematch matches — check lineups (always, not only when no live)
+        # 4. Smart sleep: matches known but far from kickoff — sleep to save API credits
+        if not live_matches and not prematch_matches:
+            earliest = self._earliest_kickoff_today(today_matches)
+            if earliest:
+                wake_at = earliest - timedelta(hours=PREMATCH_WAKEUP_BUFFER_HOURS)
+                sleep_seconds = int((wake_at - datetime.utcnow()).total_seconds())
+                if sleep_seconds > 300:  # more than 5 min — worth sleeping
+                    print(f"=== POLLER: Smart sleep — next kickoff at {earliest}, waking at {wake_at} ({sleep_seconds/3600:.1f}h) ===")
+                    return sleep_seconds
+            return INTERVAL_PREMATCH  # fallback: no kickoff time known
+
+        # 5. Handle prematch matches — check lineups (always, not only when no live)
         if prematch_matches:
             await self._handle_prematch(prematch_matches)
 
-        # 5. Handle live matches — only actual live matches
+        # 6. Handle live matches — only actual live matches
         if not live_matches:
             # Use faster interval if kickoff has passed (waiting for live transition)
             any_kickoff_passed = False
