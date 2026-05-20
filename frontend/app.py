@@ -874,87 +874,84 @@ with tab4:
                 key="heatmap_player_select"
             )
 
-            if selected == t("select_placeholder"):
-                st.info(t("select_filter"))
-                st.stop()
+            if selected != t("select_placeholder"):
+                selected_player = player_options[selected]
 
-            selected_player = player_options[selected]
+                season = "2025/26"
 
-            season = "2025/26"
+                # Fetch heatmap data
+                with st.spinner(t("loading_position_data")):
+                    heatmap_data = fetch_player_heatmap(selected_player["id"], season)
 
-            # Fetch heatmap data
-            with st.spinner(t("loading_position_data")):
-                heatmap_data = fetch_player_heatmap(selected_player["id"], season)
+                if heatmap_data and heatmap_data.get("positions"):
+                    st.markdown("---")
 
-            if heatmap_data and heatmap_data.get("positions"):
-                st.markdown("---")
+                    # Legend for users
+                    st.info(f"""
+                    {t('how_to_read_title')}
+                    {t('red_zones_desc')}
+                    {t('multiple_zones_desc')}
+                    {t('x_axis_desc')}
+                    {t('y_axis_desc')}
 
-                # Legend for users
-                st.info(f"""
-                {t('how_to_read_title')}
-                {t('red_zones_desc')}
-                {t('multiple_zones_desc')}
-                {t('x_axis_desc')}
-                {t('y_axis_desc')}
+                    {t('fewer_matches_title')}
+                    {t('fewer_matches_api')}
+                    {t('fewer_matches_detail')}
+                    {t('fewer_matches_note')}
+                    """)
 
-                {t('fewer_matches_title')}
-                {t('fewer_matches_api')}
-                {t('fewer_matches_detail')}
-                {t('fewer_matches_note')}
-                """)
+                    # Player header
+                    st.subheader(f"📍 {selected_player['name']}")
+                    st.caption(f"{clean_team_name(selected_player.get('team'))} | {get_position_display(selected_player.get('position'))} | {season}")
 
-                # Player header
-                st.subheader(f"📍 {selected_player['name']}")
-                st.caption(f"{clean_team_name(selected_player.get('team'))} | {get_position_display(selected_player.get('position'))} | {season}")
+                    # Create and display heatmap
+                    fig = create_heatmap_figure(
+                        heatmap_data["positions"],
+                        selected_player["name"]
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
-                # Create and display heatmap
-                fig = create_heatmap_figure(
-                    heatmap_data["positions"],
-                    selected_player["name"]
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                    # Stats summary
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric(t("matches"), heatmap_data["total_matches"])
+                    with col2:
+                        total_minutes = sum(p.get("minutes_played", 0) for p in heatmap_data["positions"])
+                        st.metric(t("total_minutes"), total_minutes)
+                    with col3:
+                        avg_pos = heatmap_data.get("avg_position", {})
+                        if avg_pos:
+                            position_text = interpret_position(avg_pos.get('x', 0.5), avg_pos.get('y', 0.5))
+                            st.metric(t("avg_position"), position_text)
+                            st.caption(f"({avg_pos.get('x', 0):.2f}, {avg_pos.get('y', 0):.2f})")
+                        else:
+                            st.metric(t("avg_position"), "N/A")
+                    with col4:
+                        positions = heatmap_data.get("positions", [])
+                        left_count = sum(1 for p in positions if p.get('pos_y', 0.5) > 0.65)
+                        center_count = sum(1 for p in positions if 0.35 <= p.get('pos_y', 0.5) <= 0.65)
+                        right_count = sum(1 for p in positions if p.get('pos_y', 0.5) < 0.35)
+                        st.metric(t("side_breakdown"), f"L:{left_count} C:{center_count} R:{right_count}")
 
-                # Stats summary
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric(t("matches"), heatmap_data["total_matches"])
-                with col2:
-                    total_minutes = sum(p.get("minutes_played", 0) for p in heatmap_data["positions"])
-                    st.metric(t("total_minutes"), total_minutes)
-                with col3:
-                    avg_pos = heatmap_data.get("avg_position", {})
-                    if avg_pos:
-                        position_text = interpret_position(avg_pos.get('x', 0.5), avg_pos.get('y', 0.5))
-                        st.metric(t("avg_position"), position_text)
-                        st.caption(f"({avg_pos.get('x', 0):.2f}, {avg_pos.get('y', 0):.2f})")
-                    else:
-                        st.metric(t("avg_position"), "N/A")
-                with col4:
-                    positions = heatmap_data.get("positions", [])
-                    left_count = sum(1 for p in positions if p.get('pos_y', 0.5) > 0.65)
-                    center_count = sum(1 for p in positions if 0.35 <= p.get('pos_y', 0.5) <= 0.65)
-                    right_count = sum(1 for p in positions if p.get('pos_y', 0.5) < 0.35)
-                    st.metric(t("side_breakdown"), f"L:{left_count} C:{center_count} R:{right_count}")
+                    # Match breakdown expander
+                    with st.expander(f"📋 {heatmap_data['total_matches']} {t('matches_with_zone')}"):
+                        for pos in heatmap_data["positions"][:10]:  # Show first 10
+                            comp_icon = "🏆" if pos.get("competition_type") == "league" else "🌍" if pos.get("competition_type") == "european" else "🏅"
+                            position_text = interpret_position(pos['pos_x'], pos['pos_y'])
+                            side = get_position_side(pos['pos_y'])
+                            st.markdown(
+                                f"**{comp_icon} {pos.get('competition_name', 'Unknown')}** - "
+                                f"📍 {position_text} ({side}) - "
+                                f"{pos.get('minutes_played', 0)} min"
+                            )
+                        if heatmap_data["total_matches"] > 10:
+                            st.markdown(t("and_more_matches", count=heatmap_data['total_matches'] - 10))
+                else:
+                    st.info(f"""
+                    {t('no_position_data', name=selected_player['name'])}
 
-                # Match breakdown expander
-                with st.expander(f"📋 {heatmap_data['total_matches']} {t('matches_with_zone')}"):
-                    for pos in heatmap_data["positions"][:10]:  # Show first 10
-                        comp_icon = "🏆" if pos.get("competition_type") == "league" else "🌍" if pos.get("competition_type") == "european" else "🏅"
-                        position_text = interpret_position(pos['pos_x'], pos['pos_y'])
-                        side = get_position_side(pos['pos_y'])
-                        st.markdown(
-                            f"**{comp_icon} {pos.get('competition_name', 'Unknown')}** - "
-                            f"📍 {position_text} ({side}) - "
-                            f"{pos.get('minutes_played', 0)} min"
-                        )
-                    if heatmap_data["total_matches"] > 10:
-                        st.markdown(t("and_more_matches", count=heatmap_data['total_matches'] - 10))
-            else:
-                st.info(f"""
-                {t('no_position_data', name=selected_player['name'])}
-
-                {t('sync_instruction')}
-                """)
+                    {t('sync_instruction')}
+                    """)
 
 # ============================================
 # TAB 5: LIVE MATCHES
