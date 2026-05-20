@@ -70,7 +70,7 @@ TEAM_LEAGUES: dict[str, list[int]] = {
     "Inter": [55, 141, 222, 42],      # Serie A, Coppa Italia, Supercoppa, Champions League
     "FC Porto": [61, 186],            # Primeira Liga, Taça de Portugal
     "Gent": [40, 149],                # First Division A, Belgian Cup
-    "Aston Villa": [9, 46, 45, 42],   # Premier League, FA Cup, EFL Cup, Champions League
+    "Aston Villa": [47, 132, 133, 73],  # Premier League, FA Cup, EFL Cup, Europa League
     "Atalanta": [55, 141, 42],        # Serie A, Coppa Italia, Champions League
 }
 
@@ -94,9 +94,9 @@ LEAGUE_NAMES: dict[int, str] = {
     149: "Belgian Cup",
     42: "Champions League",
     73: "Europa League",
-    9: "Premier League",
-    46: "FA Cup",
-    45: "EFL Cup",
+    47: "Premier League",
+    132: "FA Cup",
+    133: "EFL Cup",
 }
 
 
