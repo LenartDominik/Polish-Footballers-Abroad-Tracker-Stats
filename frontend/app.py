@@ -867,11 +867,17 @@ with tab4:
                 label = f"{p['name']} - {team} ({pos_display})"
                 player_options[label] = p
 
+            select_options = [t("select_placeholder")] + list(player_options.keys())
             selected = st.selectbox(
                 t("select_player_label"),
-                options=list(player_options.keys()),
+                options=select_options,
                 key="heatmap_player_select"
             )
+
+            if selected == t("select_placeholder"):
+                st.info(t("select_filter"))
+                st.stop()
+
             selected_player = player_options[selected]
 
             season = "2025/26"
