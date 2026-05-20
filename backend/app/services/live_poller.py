@@ -44,6 +44,14 @@ LIVE_TRACKED_PLAYERS = {
         "name": "Michał Skóraś",
         "team_name": "Gent",
     },
+    729731: {
+        "name": "Matty Cash",
+        "team_name": "Aston Villa",
+    },
+    1053714: {
+        "name": "Nicola Zalewski",
+        "team_name": "Atalanta",
+    },
 }
 
 # Polling intervals (seconds)
@@ -62,6 +70,8 @@ TEAM_LEAGUES: dict[str, list[int]] = {
     "Inter": [55, 141, 222, 42],      # Serie A, Coppa Italia, Supercoppa, Champions League
     "FC Porto": [61, 186],            # Primeira Liga, Taça de Portugal
     "Gent": [40, 149],                # First Division A, Belgian Cup
+    "Aston Villa": [9, 46, 45, 42],   # Premier League, FA Cup, EFL Cup, Champions League
+    "Atalanta": [55, 141, 42],        # Serie A, Coppa Italia, Champions League
 }
 
 # Auto-derived: unique league IDs for all tracked teams
@@ -84,6 +94,9 @@ LEAGUE_NAMES: dict[int, str] = {
     149: "Belgian Cup",
     42: "Champions League",
     73: "Europa League",
+    9: "Premier League",
+    46: "FA Cup",
+    45: "EFL Cup",
 }
 
 
