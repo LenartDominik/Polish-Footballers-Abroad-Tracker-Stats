@@ -17,10 +17,13 @@ load_dotenv()
 # Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 st.set_page_config(
-    page_title="Polish Footballers Abroad",
+    page_title="Polish Footballers Abroad Tracker - Statystyki Polaków za Granicą",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded",
+    menu_items={
+        "About": "Polish Footballers Abroad Tracker - śledź statystyki polskich piłkarzy grających za granicą. Goles, asysty, xG, clean sheets i więcej.",
+    },
 )
 
 # Apply theme CSS
@@ -30,12 +33,8 @@ st.markdown(get_theme_css(), unsafe_allow_html=True)
 language_selector()
 
 
-def fetch_players(
-    name: Optional[str] = None,
-    team: Optional[str] = None,
-    league: Optional[str] = None,
-    limit: int = 20,
-) -> List[dict]:
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_players(name: Optional[str] = None, team: Optional[str] = None, league: Optional[str] = None, limit: int = 20) -> List[dict]:
     """Fetch players from API."""
     params: dict[str, str | int] = {"limit": limit}
     if name:
@@ -46,7 +45,6 @@ def fetch_players(
         params["league"] = league
 
     try:
-        # Use /players/search only when filters are provided, otherwise /players/
         if name or team or league:
             response = requests.get(f"{API_BASE_URL}/players/search", params=params)
         else:
@@ -58,6 +56,7 @@ def fetch_players(
         return []
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_top_players(season: str = "2025/26", limit: int = 10) -> List[dict]:
     """Fetch top players from API."""
     try:
@@ -72,6 +71,7 @@ def fetch_top_players(season: str = "2025/26", limit: int = 10) -> List[dict]:
         return []
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_player_stats(player_id: int, season: Optional[str] = None) -> Optional[dict]:
     """Fetch player statistics."""
     params = {}
@@ -89,6 +89,7 @@ def fetch_player_stats(player_id: int, season: Optional[str] = None) -> Optional
         return None
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_player_detailed_stats(player_id: int, season: Optional[str] = None) -> Optional[dict]:
     """Fetch player detailed statistics with competition breakdown."""
     params = {}
@@ -106,6 +107,7 @@ def fetch_player_detailed_stats(player_id: int, season: Optional[str] = None) ->
         return None
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_player_heatmap(player_id: int, season: str = "2025/26") -> Optional[dict]:
     """Fetch player heatmap position data."""
     try:
@@ -119,6 +121,7 @@ def fetch_player_heatmap(player_id: int, season: str = "2025/26") -> Optional[di
         return None
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def fetch_live_status() -> dict:
     """Fetch live match status."""
     try:
@@ -129,6 +132,7 @@ def fetch_live_status() -> dict:
         return {"is_live": False, "matches_count": 0}
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def fetch_live_matches() -> list[dict]:
     """Fetch current live matches with events."""
     try:
@@ -139,6 +143,7 @@ def fetch_live_matches() -> list[dict]:
         return []
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def fetch_upcoming_matches(limit: int = 5) -> list[dict]:
     """Fetch upcoming matches with tracked Polish players."""
     try:
@@ -261,6 +266,7 @@ def create_heatmap_figure(positions: List[dict], player_name: str) -> go.Figure:
     return fig
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_leagues() -> List[dict]:
     """Fetch available leagues."""
     try:
@@ -271,6 +277,7 @@ def fetch_leagues() -> List[dict]:
         return []
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_filter_options() -> dict:
     """Fetch filter options for autocomplete (names, teams, leagues)."""
     try:
@@ -452,7 +459,7 @@ st.sidebar.title(t("sidebar_title"))
 st.sidebar.markdown("---")
 
 # Global filters in sidebar
-st.sidebar.subheader(t("filters"))
+st.sidebar.markdown(f'<h2 style="font-size: 1.1rem; margin-top: 0;">{t("filters")}</h2>', unsafe_allow_html=True)
 
 # Fetch filter options for autocomplete (cached)
 filter_options = get_cached_filter_options()
@@ -576,7 +583,19 @@ with tab1:
         elif search_club:
             st.warning(t("no_players_in_club", club=search_club))
         else:
-            st.info(t("use_filters"))
+            st.markdown(f'<div style="background: rgba(59,130,246,0.15); color: #93C5FD; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #3B82F6; font-size: 0.95rem;">{t("use_filters")}</div>', unsafe_allow_html=True)
+
+    # Stats legend (Dashboard tab only)
+    with st.expander(t("stats_legend")):
+        st.markdown(f"""
+        {t('legend_g90')}
+        {t('legend_a90')}
+        {t('legend_ga90')}
+        {t('legend_cs')}
+        {t('legend_ga')}
+        {t('legend_save_pct')}
+        {t('legend_rating')}
+        """)
 
 with tab2:
     st.markdown(f'<h2 style="text-align: center;">{t("player_search")}</h2>', unsafe_allow_html=True)
@@ -683,16 +702,31 @@ with tab2:
         else:
             st.warning(t("no_players_criteria"))
     else:
-        st.info(t("select_filter"))
+        st.markdown(f'<div style="background: rgba(59,130,246,0.15); color: #93C5FD; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #3B82F6; font-size: 0.95rem;">{t("select_filter")}</div>', unsafe_allow_html=True)
+
+    # Stats legend (Search tab only)
+    with st.expander(t("stats_legend")):
+        st.markdown(f"""
+        {t('legend_g90')}
+        {t('legend_a90')}
+        {t('legend_ga90')}
+        {t('legend_cs')}
+        {t('legend_ga')}
+        {t('legend_save_pct')}
+        {t('legend_rating')}
+        """)
 
 with tab3:
     st.markdown(f'<h2 style="text-align: center;">{t("player_comparison")}</h2>', unsafe_allow_html=True)
 
-    # Premium badge
+    # Premium badge + position info
     st.markdown(f"""
     <div style="text-align: center; margin-bottom: 20px;">
         <span style="background: linear-gradient(90deg, #FFD700, #FFA500); color: #000; padding: 4px 12px;
                      border-radius: 12px; font-weight: bold; font-size: 0.8rem;">{t("premium_feature")}</span>
+    </div>
+    <div style="text-align: center; color: #93C5FD; font-size: 0.85rem; margin-bottom: 16px;">
+        ℹ️ {t('compare_position_info')}
     </div>
     """, unsafe_allow_html=True)
 
@@ -830,7 +864,19 @@ with tab3:
                         else:
                             st.warning(t("no_data_compare"))
         else:
-            st.info(t("select_two_players"))
+            st.markdown(f'<div style="background: rgba(59,130,246,0.15); color: #93C5FD; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #3B82F6; font-size: 0.95rem;">{t("select_two_players")}</div>', unsafe_allow_html=True)
+
+    # Stats legend (Compare tab)
+    with st.expander(t("stats_legend")):
+        st.markdown(f"""
+        {t('legend_g90')}
+        {t('legend_a90')}
+        {t('legend_ga90')}
+        {t('legend_cs')}
+        {t('legend_ga')}
+        {t('legend_save_pct')}
+        {t('legend_rating')}
+        """)
 
 # ============================================
 # TAB 4: HEATMAPS
@@ -887,18 +933,19 @@ with tab4:
                     st.markdown("---")
 
                     # Legend for users
-                    st.info(f"""
-                    {t('how_to_read_title')}
-                    {t('red_zones_desc')}
-                    {t('multiple_zones_desc')}
-                    {t('x_axis_desc')}
-                    {t('y_axis_desc')}
-
-                    {t('fewer_matches_title')}
-                    {t('fewer_matches_api')}
-                    {t('fewer_matches_detail')}
+                    st.markdown(f"""
+                    <div style="background: rgba(59,130,246,0.12); color: #93C5FD; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #3B82F6; font-size: 0.9rem; line-height: 1.6;">
+                    {t('how_to_read_title')}<br>
+                    {t('red_zones_desc')}<br>
+                    {t('multiple_zones_desc')}<br>
+                    {t('x_axis_desc')}<br>
+                    {t('y_axis_desc')}<br><br>
+                    {t('fewer_matches_title')}<br>
+                    {t('fewer_matches_api')}<br>
+                    {t('fewer_matches_detail')}<br>
                     {t('fewer_matches_note')}
-                    """)
+                    </div>
+                    """, unsafe_allow_html=True)
 
                     # Player header
                     st.subheader(f"📍 {selected_player['name']}")
@@ -947,11 +994,12 @@ with tab4:
                         if heatmap_data["total_matches"] > 10:
                             st.markdown(t("and_more_matches", count=heatmap_data['total_matches'] - 10))
                 else:
-                    st.info(f"""
-                    {t('no_position_data', name=selected_player['name'])}
-
+                    st.markdown(f"""
+                    <div style="background: rgba(59,130,246,0.12); color: #93C5FD; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #3B82F6; font-size: 0.9rem; line-height: 1.6;">
+                    {t('no_position_data', name=selected_player['name'])}<br><br>
                     {t('sync_instruction')}
-                    """)
+                    </div>
+                    """, unsafe_allow_html=True)
 
 # ============================================
 # TAB 5: LIVE MATCHES
@@ -1290,7 +1338,7 @@ with tab5:
 
     # --- NO LIVE + NO PREMATCH: SHOW INFO ---
     if not is_live and not is_prematch:
-        st.info(t("live_no_matches"))
+        st.markdown(f'<div style="background: rgba(59,130,246,0.15); color: #93C5FD; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #3B82F6; font-size: 0.95rem;">{t("live_no_matches")}</div>', unsafe_allow_html=True)
 
     # --- UPCOMING MATCHES (always visible) ---
     upcoming = fetch_upcoming_matches(limit=10)
@@ -1397,16 +1445,5 @@ with tab5:
                 st.markdown(item_html, unsafe_allow_html=True)
 
 
-# ============================================
-# LEGEND
-# ============================================
-with st.expander(t("stats_legend")):
-    st.markdown(f"""
-    {t('legend_g90')}
-    {t('legend_a90')}
-    {t('legend_ga90')}
-    {t('legend_cs')}
-    {t('legend_ga')}
-    {t('legend_save_pct')}
-    {t('legend_rating')}
-    """)
+# Close main landmark
+st.markdown("</main>", unsafe_allow_html=True)

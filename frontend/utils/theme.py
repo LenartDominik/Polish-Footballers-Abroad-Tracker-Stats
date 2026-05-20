@@ -154,7 +154,46 @@ def get_theme_css() -> str:
         text-align: center;
         color: {COLORS['text_primary']};
     }}
+
+    /* CLS fix: contain layout shifts within tabs */
+    .stTabs [data-testid="stTabContent"] {{
+        min-height: 400px;
+        contain: layout style;
+    }}
+
+    /* CLS fix: stable sidebar width */
+    section[data-testid="stSidebar"] {{
+        width: 336px !important;
+        min-width: 336px !important;
+    }}
+
+    /* CLS fix: stable spinner area */
+    .stSpinner > div {{
+        min-height: 40px;
+    }}
+
+    /* CLS fix: stable columns */
+    [data-testid="stColumn"] {{
+        contain: layout style;
+    }}
+
+    /* CLS fix: prevent reflow from dynamic content */
+    .block-container {{
+        contain: layout style;
+    }}
+
+    /* CLS fix: stable Plotly chart containers */
+    .js-plotly-plot {{
+        contain: layout style;
+    }}
     </style>
+
+    <!-- SEO: Meta Description -->
+    <meta name="description" content="Śledź statystyki polskich piłkarzy grających za granicą. Goles, asysty, xG/90, clean sheets, save%. Lewandowski, Zieliński, Kiwior i więcej." />
+    <meta name="keywords" content="polscy piłkarze, statystyki, Lewandowski, Zieliński, Kiwior, ekstraklasa, Premier League, La Liga" />
+    <meta property="og:title" content="Polish Footballers Abroad Tracker" />
+    <meta property="og:description" content="Śledź statystyki polskich piłkarzy grających za granicą na żywo." />
+    <meta property="og:type" content="website" />
     """
 
 
@@ -165,6 +204,7 @@ def render_header(page_title: str = "", page_icon: str = "") -> None:
     title = f"{page_icon} {page_title}" if page_icon else page_title
 
     st.markdown(f"""
+    <main role="main">
     <div class="app-header">
         <h1>🇵🇱 {t('app_title')}</h1>
         <p class="subtitle">{t('app_subtitle')}</p>
