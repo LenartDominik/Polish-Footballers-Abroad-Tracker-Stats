@@ -47,7 +47,7 @@ LIVE_TRACKED_PLAYERS = {
 }
 
 # Polling intervals (seconds)
-INTERVAL_SLEEPING = 1800   # 30 min - no match, recheck fixtures
+INTERVAL_SLEEPING = 21600  # 6h - no match, recheck fixtures
 INTERVAL_PREMATCH = 1800   # 30 min - match day but not near kickoff
 INTERVAL_PREMATCH_LINEUP = 120    # 2 min - prematch near kickoff, fast transition to live
 INTERVAL_PREMATCH_KICKOFF = 60    # 1 min - kickoff passed, aggressively check if started
