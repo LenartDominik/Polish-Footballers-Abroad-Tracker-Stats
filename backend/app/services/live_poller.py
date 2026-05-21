@@ -68,7 +68,7 @@ INTERVAL_PREMATCH_KICKOFF = 60    # 1 min - kickoff passed, aggressively check i
 INTERVAL_TRACKING = 60     # 1 min - live match, player playing
 INTERVAL_BENCH = 60        # 1 min - live match, player on bench
 PREMATCH_WINDOW_HOURS = 0.75  # 45 min - check lineups when kickoff within this many hours
-PREMATCH_WAKEUP_BUFFER_HOURS = 1.0  # wake up this long before kickoff
+PREMATCH_WAKEUP_BUFFER_HOURS = 0.5  # 30 min - wake up this long before kickoff
 
 # Team -> league IDs mapping (only check leagues where tracked teams actually play)
 TEAM_LEAGUES: dict[str, list[int]] = {
@@ -601,8 +601,38 @@ class LivePoller:
                 continue
         return earliest
 
+    async def _read_fixture_db_cache(self) -> Optional[dict]:
+        """Read fixture check result from Supabase (survives container restarts)."""
+        try:
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import text
+                result = await session.execute(
+                    text("SELECT cache_date, has_match FROM poller_cache WHERE cache_key = 'fixture_check'")
+                )
+                row = result.fetchone()
+                if row:
+                    return {"date": row[0], "has_match": row[1]}
+        except Exception:
+            pass
+        return None
+
+    async def _write_fixture_db_cache(self, today: date, has_match: bool):
+        """Save fixture check result to Supabase."""
+        try:
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import text
+                # Upsert: delete old, insert new
+                await session.execute(text("DELETE FROM poller_cache WHERE cache_key = 'fixture_check'"))
+                await session.execute(
+                    text("INSERT INTO poller_cache (cache_key, cache_date, has_match, updated_at) VALUES ('fixture_check', :d, :h, NOW())"),
+                    {"d": today.isoformat(), "h": has_match},
+                )
+                await session.commit()
+        except Exception as e:
+            print(f"=== POLLER: DB cache write failed: {e} ===")
+
     def _read_fixture_file_cache(self) -> Optional[dict]:
-        """Read fixture check result from file cache (survives restarts)."""
+        """Read fixture check result from file cache (fallback)."""
         try:
             with open(_FIXTURE_CACHE_FILE, "r") as f:
                 data = json.load(f)
@@ -611,7 +641,7 @@ class LivePoller:
             return None
 
     def _write_fixture_file_cache(self, today: date, has_match: bool):
-        """Save fixture check result to file cache."""
+        """Save fixture check result to file cache (fallback)."""
         try:
             with open(_FIXTURE_CACHE_FILE, "w") as f:
                 json.dump({
@@ -636,16 +666,27 @@ class LivePoller:
             print(f"=== POLLER: Using memory cache: has_match={self._has_match_today} ===")
             return self._has_match_today
 
-        # Level 2: file cache (survives server sleep/wake)
+        # Level 2: database cache (survives container restarts on Render)
+        db_cache = await self._read_fixture_db_cache()
+        if db_cache and db_cache.get("date") == today.isoformat():
+            has_match = db_cache["has_match"]
+            self._fixture_check_date = today
+            self._has_match_today = has_match
+            print(f"=== POLLER: Using DB cache: has_match={has_match} ===")
+            return has_match
+
+        # Level 3: file cache (fallback)
         file_cache = self._read_fixture_file_cache()
         if file_cache and file_cache.get("date") == today.isoformat():
             has_match = file_cache["has_match"]
             self._fixture_check_date = today
             self._has_match_today = has_match
             print(f"=== POLLER: Using FILE cache: has_match={has_match} ===")
+            # Backfill DB cache
+            await self._write_fixture_db_cache(today, has_match)
             return has_match
 
-        # Level 3: API calls — primary leagues first (5 calls), then cups (8 calls)
+        # Level 4: API calls — primary leagues first (5 calls), then cups (8 calls)
         print(f"=== POLLER: Checking fixtures for {today.isoformat()} (no cache) ===")
 
         tracked_team_names = {
@@ -660,9 +701,10 @@ class LivePoller:
         if not has_match and CUP_LEAGUE_IDS:
             has_match = await self._check_leagues_for_today(CUP_LEAGUE_IDS, tracked_team_names, today)
 
-        # Cache results (both memory and file)
+        # Cache results (memory + DB + file)
         self._fixture_check_date = today
         self._has_match_today = has_match
+        await self._write_fixture_db_cache(today, has_match)
         self._write_fixture_file_cache(today, has_match)
 
         if not has_match:
