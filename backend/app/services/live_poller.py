@@ -65,8 +65,8 @@ INTERVAL_SLEEPING = 21600  # 6h - no match, recheck fixtures
 INTERVAL_PREMATCH = 1800   # 30 min - match day but not near kickoff
 INTERVAL_PREMATCH_LINEUP = 120    # 2 min - prematch near kickoff, fast transition to live
 INTERVAL_PREMATCH_KICKOFF = 60    # 1 min - kickoff passed, aggressively check if started
-INTERVAL_TRACKING = 60     # 1 min - live match, player playing
-INTERVAL_BENCH = 60        # 1 min - live match, player on bench
+INTERVAL_TRACKING = 120    # 2 min - live match, player playing
+INTERVAL_BENCH = 120       # 2 min - live match, player on bench
 PREMATCH_WINDOW_HOURS = 0.75  # 45 min - check lineups when kickoff within this many hours
 PREMATCH_WAKEUP_BUFFER_HOURS = 0.5  # 30 min - wake up this long before kickoff
 
@@ -995,8 +995,8 @@ class LivePoller:
         Results are cached with 10min TTL to avoid hammering fixture API."""
         today = date.today()
 
-        # Return cached results if fresh (within 10 minutes)
-        cache_ttl = 600  # 10 minutes
+        # Return cached results if fresh (within 30 minutes)
+        cache_ttl = 1800  # 30 minutes
         if (
             self._today_matches_cache
             and self._today_matches_cache_date == today
@@ -1010,7 +1010,9 @@ class LivePoller:
         }
 
         today_matches = {}
-        for league_id in TRACKED_LEAGUE_IDS:
+
+        # Phase 1: primary domestic leagues (5 calls) — most matches found here
+        for league_id in PRIMARY_LEAGUE_IDS:
             try:
                 fixtures = await rapidapi_client.get_matches_by_league(league_id)
                 if not isinstance(fixtures, list):
@@ -1062,6 +1064,58 @@ class LivePoller:
 
             except Exception as e:
                 print(f"=== POLLER: Fixture lookup failed for league {league_id}: {e} ===")
+
+        # Phase 2: cup/European leagues (up to 8 calls) — only if primary found nothing
+        if not today_matches and CUP_LEAGUE_IDS:
+            for league_id in CUP_LEAGUE_IDS:
+                try:
+                    fixtures = await rapidapi_client.get_matches_by_league(league_id)
+                    if not isinstance(fixtures, list):
+                        continue
+
+                    for match in fixtures:
+                        if not isinstance(match, dict):
+                            continue
+
+                        home = match.get("home", match.get("homeTeam", {}))
+                        away = match.get("away", match.get("awayTeam", {}))
+
+                        home_name = home.get("name", "") if isinstance(home, dict) else ""
+                        away_name = away.get("name", "") if isinstance(away, dict) else ""
+
+                        home_score = home.get("score", 0) if isinstance(home, dict) else 0
+                        away_score = away.get("score", 0) if isinstance(away, dict) else 0
+
+                        for rapidapi_id, info in LIVE_TRACKED_PLAYERS.items():
+                            team_lower = info["team_name"].lower()
+                            if team_lower in home_name.lower() or team_lower in away_name.lower():
+                                if _match_is_today(match, today):
+                                    status = match.get("status", {})
+                                    is_started = status.get("started", False) if isinstance(status, dict) else False
+                                    is_finished = status.get("finished", True) if isinstance(status, dict) else True
+
+                                    match_id = match.get("id")
+                                    try:
+                                        match_id = int(match_id)
+                                    except (ValueError, TypeError):
+                                        continue
+
+                                    if is_finished or match_id in self._given_up_match_ids:
+                                        continue
+
+                                    today_matches[rapidapi_id] = {
+                                        "match_id": match_id,
+                                        "home_team": home_name,
+                                        "away_team": away_name,
+                                        "home_score": home_score,
+                                        "away_score": away_score,
+                                        "status": "live" if is_started and not is_finished else "scheduled",
+                                        "competition": match.get("tournament", {}).get("name", "") if isinstance(match.get("tournament"), dict) else "",
+                                        "kickoff_time": match.get("status", {}).get("utcTime", "") if isinstance(match.get("status"), dict) else "",
+                                    }
+
+                except Exception as e:
+                    print(f"=== POLLER: Fixture lookup failed for league {league_id}: {e} ===")
 
         # Cache results with timestamp
         self._today_matches_cache = today_matches
@@ -1292,38 +1346,9 @@ class LivePoller:
         except Exception as e:
             print(f"=== POLLER: get_match_status failed for match_id={match_id}: {e} ===")
 
-        # Strategy 2: re-check fixture API for started/ongoing flag
-        try:
-            for league_id in TRACKED_LEAGUE_IDS:
-                fixtures = await rapidapi_client.get_matches_by_league(league_id)
-                if not isinstance(fixtures, list):
-                    continue
-                for fixture in fixtures:
-                    if fixture.get("id") != match_id:
-                        continue
-                    status = fixture.get("status", {})
-                    if not isinstance(status, dict):
-                        break
-                    if status.get("finished"):
-                        return ("finished", None)
-                    if status.get("started") or status.get("ongoing"):
-                        score_str = status.get("scoreStr", "")
-                        home_score, away_score = 0, 0
-                        if score_str and " - " in score_str:
-                            parts = score_str.split(" - ")
-                            try:
-                                home_score = int(parts[0])
-                                away_score = int(parts[1])
-                            except ValueError:
-                                pass
-                        return (True, {"home_score": home_score, "away_score": away_score, "minute": ""})
-                    break
-        except Exception as e:
-            print(f"=== POLLER: fixture fallback failed for match_id={match_id}: {e} ===")
-
-        # No Strategy 3 — never assume live based on time alone.
-        # Wait for API confirmation regardless of delay duration.
-        # Poller retries every 1 min after kickoff, so it will detect
+        # No further strategies — never assume live based on time alone.
+        # Wait for get_match_status confirmation regardless of delay duration.
+        # Poller retries every 2 min after kickoff, so it will detect
         # the start whenever the API reports it.
         return (None, None)
 
