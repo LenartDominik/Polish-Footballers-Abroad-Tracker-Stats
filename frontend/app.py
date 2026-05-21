@@ -1033,8 +1033,58 @@ with tab5:
         refresh_ms = 300000
     st_autorefresh(interval=refresh_ms, key="live_autorefresh")
 
-    _now_pl = datetime.now(_WARSAW_TZ).strftime("%H:%M:%S")
-    st.markdown(f'<p style="text-align:right; font-size:0.75rem; color:#94A3B8;">Ostatnia aktualizacja: {_now_pl}</p>', unsafe_allow_html=True)
+    # --- STATUS BAR: contextual message + relative time ---
+    _now_pl = datetime.now(_WARSAW_TZ)
+    _refresh_time = st.session_state.get("_live_last_refresh", _now_pl)
+    if "_live_last_refresh" not in st.session_state or (_now_pl - _refresh_time).total_seconds() > refresh_ms / 1000 + 5:
+        st.session_state["_live_last_refresh"] = _now_pl
+        _refresh_time = _now_pl
+
+    elapsed_sec = int((_now_pl - _refresh_time).total_seconds())
+    if elapsed_sec < 3:
+        refresh_label = t("live_refreshed_just")
+    elif elapsed_sec < 60:
+        refresh_label = t("live_refreshed_ago").format(time=f"{elapsed_sec}s")
+    else:
+        refresh_label = t("live_refreshed_ago").format(time=f"{elapsed_sec // 60}min")
+
+    # Contextual status message
+    if is_live:
+        status_msg = ""
+    elif is_prematch:
+        status_msg = ""
+    else:
+        # Try to show next match countdown
+        upcoming_check = fetch_upcoming_matches(limit=1)
+        if upcoming_check:
+            kt = upcoming_check[0].get("kickoff_time", "")
+            if kt:
+                try:
+                    kickoff_dt = datetime.fromisoformat(kt.replace("Z", "+00:00"))
+                    diff_h = int((kickoff_dt - _now_pl).total_seconds() / 3600)
+                    diff_m = int((kickoff_dt - _now_pl).total_seconds() / 60) % 60
+                    if diff_h > 24:
+                        status_msg = t("live_status_no_match")
+                    elif diff_h > 0:
+                        status_msg = t("live_status_next_in").format(time=f"{diff_h}h {diff_m}min")
+                    else:
+                        status_msg = t("live_status_next_in").format(time=f"{diff_m}min")
+                except (ValueError, OSError):
+                    status_msg = t("live_status_no_match")
+            else:
+                status_msg = t("live_status_no_match")
+        else:
+            status_msg = t("live_status_no_match")
+
+    status_line = f'<span style="color: #94A3B8; font-size: 0.75rem;">{status_msg}</span>' if status_msg else ''
+
+    st.markdown(
+        f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">'
+        f'{status_line}'
+        f'<span style="color: #64748B; font-size: 0.7rem;">{refresh_label}</span>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
     live_matches = fetch_live_matches() if (is_live or is_prematch) else []
 
@@ -1327,7 +1377,10 @@ with tab5:
             f'<div style="color: #F1F5F9; font-weight: 700; font-size: 1.5rem; text-align: left;">{away}</div>'
             '</div>'
             '<div style="margin-top: 4px; padding: 2px 10px; background: rgba(220,38,38,0.1); border-radius: 12px;">'
-            f'<span style="color: #DC2626; font-size: 0.8rem; font-weight: 700;">● LIVE {minute_display}</span>'
+            '<style>@keyframes livepulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>'
+            f'<span style="color: #DC2626; font-size: 0.8rem; font-weight: 700;">'
+            f'<span style="display:inline-block;width:8px;height:8px;background:#DC2626;border-radius:50%;margin-right:5px;animation:livepulse 1.5s ease-in-out infinite;"></span>'
+            f'LIVE {minute_display}</span>'
             '</div>'
             f'<div style="color: #64748B; font-size: 0.7rem; margin-top: 2px;">{competition}</div>'
             '</div>'
