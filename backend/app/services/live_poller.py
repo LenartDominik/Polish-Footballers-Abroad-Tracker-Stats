@@ -625,7 +625,7 @@ class LivePoller:
                 await session.execute(text("DELETE FROM poller_cache WHERE cache_key = 'fixture_check'"))
                 await session.execute(
                     text("INSERT INTO poller_cache (cache_key, cache_date, has_match, updated_at) VALUES ('fixture_check', :d, :h, NOW())"),
-                    {"d": today.isoformat(), "h": has_match},
+                    {"d": today, "h": has_match},
                 )
                 await session.commit()
         except Exception as e:
