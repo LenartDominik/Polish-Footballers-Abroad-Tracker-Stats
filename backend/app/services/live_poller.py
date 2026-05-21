@@ -1,6 +1,9 @@
 """Background poller for live match tracking of Polish players."""
 
 import asyncio
+import json
+import os
+import tempfile
 from datetime import datetime, date, timedelta
 from typing import Optional
 
@@ -13,6 +16,9 @@ from app.db.session import AsyncSessionLocal
 from app.services.rapidapi import rapidapi_client
 
 logger = structlog.get_logger()
+
+# File-based cache — survives server sleep/wake cycles on Render
+_FIXTURE_CACHE_FILE = os.path.join(tempfile.gettempdir(), "poller_fixture_cache.json")
 
 # Tracked players: rapidapi_id -> info
 LIVE_TRACKED_PLAYERS = {
@@ -80,6 +86,10 @@ TRACKED_LEAGUE_IDS = list({
     for team_name in {info["team_name"] for info in LIVE_TRACKED_PLAYERS.values()}
     for league_id in TEAM_LEAGUES.get(team_name, [])
 })
+
+# Primary domestic leagues — checked first (5 instead of 13 on most days)
+PRIMARY_LEAGUE_IDS = [87, 55, 61, 40, 47]  # La Liga, Serie A, Primeira Liga, Belgian, Premier League
+CUP_LEAGUE_IDS = [lid for lid in TRACKED_LEAGUE_IDS if lid not in PRIMARY_LEAGUE_IDS]
 
 LEAGUE_NAMES: dict[int, str] = {
     87: "La Liga",
@@ -591,23 +601,81 @@ class LivePoller:
                 continue
         return earliest
 
+    def _read_fixture_file_cache(self) -> Optional[dict]:
+        """Read fixture check result from file cache (survives restarts)."""
+        try:
+            with open(_FIXTURE_CACHE_FILE, "r") as f:
+                data = json.load(f)
+            return data
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            return None
+
+    def _write_fixture_file_cache(self, today: date, has_match: bool):
+        """Save fixture check result to file cache."""
+        try:
+            with open(_FIXTURE_CACHE_FILE, "w") as f:
+                json.dump({
+                    "date": today.isoformat(),
+                    "has_match": has_match,
+                }, f)
+        except OSError:
+            pass
+
     async def _check_fixtures_today(self) -> bool:
-        """Check if any tracked team has a match today."""
+        """Check if any tracked team has a match today.
+
+        Uses 3-level cache:
+        1. In-memory (fastest, lost on restart)
+        2. File cache (survives restart, lost on redeploy)
+        3. API call (primary leagues first, then cups)
+        """
         today = date.today()
 
+        # Level 1: in-memory cache
         if self._fixture_check_date == today:
-            print(f"=== POLLER: Using cached fixture result: {self._has_match_today} ===")
+            print(f"=== POLLER: Using memory cache: has_match={self._has_match_today} ===")
             return self._has_match_today
 
-        print(f"=== POLLER: Checking fixtures for {today.isoformat()} ===")
+        # Level 2: file cache (survives server sleep/wake)
+        file_cache = self._read_fixture_file_cache()
+        if file_cache and file_cache.get("date") == today.isoformat():
+            has_match = file_cache["has_match"]
+            self._fixture_check_date = today
+            self._has_match_today = has_match
+            print(f"=== POLLER: Using FILE cache: has_match={has_match} ===")
+            return has_match
+
+        # Level 3: API calls — primary leagues first (5 calls), then cups (8 calls)
+        print(f"=== POLLER: Checking fixtures for {today.isoformat()} (no cache) ===")
 
         tracked_team_names = {
             info["team_name"].lower() for info in LIVE_TRACKED_PLAYERS.values()
         }
-        print(f"=== POLLER: Looking for teams: {tracked_team_names} in leagues {TRACKED_LEAGUE_IDS} ===")
 
         has_match = False
-        for league_id in TRACKED_LEAGUE_IDS:
+        # Phase 1: primary domestic leagues (5 calls) — most matches are here
+        has_match = await self._check_leagues_for_today(PRIMARY_LEAGUE_IDS, tracked_team_names, today)
+
+        # Phase 2: cup/European leagues only if primary found nothing
+        if not has_match and CUP_LEAGUE_IDS:
+            has_match = await self._check_leagues_for_today(CUP_LEAGUE_IDS, tracked_team_names, today)
+
+        # Cache results (both memory and file)
+        self._fixture_check_date = today
+        self._has_match_today = has_match
+        self._write_fixture_file_cache(today, has_match)
+
+        if not has_match:
+            print("=== POLLER: No matches for tracked teams today — sleeping ===")
+        else:
+            print("=== POLLER: MATCH DAY DETECTED — switching to livescores polling ===")
+
+        return has_match
+
+    async def _check_leagues_for_today(self, league_ids: list, tracked_team_names: set, today: date) -> bool:
+        """Check a list of leagues for today's matches. Returns True if found."""
+        has_match = False
+        for league_id in league_ids:
             try:
                 fixtures = await rapidapi_client.get_matches_by_league(league_id)
                 if not isinstance(fixtures, list):
@@ -617,32 +685,17 @@ class LivePoller:
                     if not isinstance(match, dict):
                         continue
 
-                    # API format: home.name, away.name, status.utcTime
                     home = match.get("home", match.get("homeTeam", {}))
                     away = match.get("away", match.get("awayTeam", {}))
 
-                    if isinstance(home, dict):
-                        home_name = home.get("name", "").lower()
-                    else:
-                        home_name = match.get("homeTeamName", str(home) if home else "").lower()
-
-                    if isinstance(away, dict):
-                        away_name = away.get("name", "").lower()
-                    else:
-                        away_name = match.get("awayTeamName", str(away) if away else "").lower()
-
-                    for team_name in tracked_team_names:
-                        if team_name in home_name or team_name in away_name:
-                            status = match.get("status", {})
-                            utc_time = status.get("utcTime", "NO TIME") if isinstance(status, dict) else "NO STATUS"
-                            print(f"=== POLLER: Found team match: {home_name} vs {away_name} utcTime={utc_time} ===")
-                            break
+                    home_name = home.get("name", "").lower() if isinstance(home, dict) else ""
+                    away_name = away.get("name", "").lower() if isinstance(away, dict) else ""
 
                     for team_name in tracked_team_names:
                         if team_name in home_name or team_name in away_name:
                             if _match_is_today(match, today):
                                 has_match = True
-                                print(f"=== POLLER: MATCH TODAY FOUND: {home_name} vs {away_name} ===")
+                                print(f"=== POLLER: MATCH TODAY FOUND: {home_name} vs {away_name} (league {league_id}) ===")
                                 break
                     if has_match:
                         break
@@ -652,14 +705,6 @@ class LivePoller:
 
             if has_match:
                 break
-
-        self._fixture_check_date = today
-        self._has_match_today = has_match
-
-        if not has_match:
-            print("=== POLLER: No matches for tracked teams today — sleeping ===")
-        else:
-            print("=== POLLER: MATCH DAY DETECTED — switching to livescores polling ===")
 
         return has_match
 
@@ -697,12 +742,14 @@ class LivePoller:
         live_matches = {}
 
         for rapidapi_id, match_info in today_matches.items():
+            match_id = match_info["match_id"]
+            # Skip matches we already gave up on (finished, API failures)
+            if match_id in self._given_up_match_ids:
+                print(f"=== POLLER: Skipping given-up match_id={match_id} ===")
+                continue
+
             match_status = match_info.get("status", "scheduled")
             if match_status == "live":
-                # Skip matches we already gave up on (API keeps returning them as live)
-                if match_info["match_id"] in self._given_up_match_ids:
-                    print(f"=== POLLER: Skipping given-up match_id={match_info['match_id']} ===")
-                    continue
                 live_matches[rapidapi_id] = match_info
             else:
                 # Check if kickoff within prematch window
@@ -953,6 +1000,10 @@ class LivePoller:
                                 try:
                                     match_id = int(match_id)
                                 except (ValueError, TypeError):
+                                    continue
+
+                                # Skip finished matches — no point tracking them
+                                if is_finished or match_id in self._given_up_match_ids:
                                     continue
 
                                 # Store match info
