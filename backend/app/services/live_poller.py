@@ -418,7 +418,9 @@ def _extract_events_from_lineup(lineup_data: dict, tracked_player_name: str) -> 
             if not isinstance(evt, dict):
                 continue
             event_type = evt.get("type", "").lower()
-            event_time = evt.get("time", evt.get("minute")) or 0
+            event_time = evt.get("time", evt.get("minute", evt.get("matchTime")))
+            if not event_time:
+                logger.warning("Event has no time field", raw_event=evt, player=pname)
             mapped = _map_event_type(event_type)
             if mapped:
                 tracked_events.append({
@@ -530,6 +532,7 @@ class LivePoller:
         self._given_up_match_ids: set[int] = set()  # match_ids removed due to API failures — don't re-add
         self._today_matches_cache: dict = {}  # cached today's matches (fixture API)
         self._today_matches_cache_date: Optional[date] = None  # date of cached fixtures
+        self._today_matches_cache_time: Optional[datetime] = None  # when today_matches were cached
 
     async def start(self):
         """Start the background poller."""
@@ -611,7 +614,7 @@ class LivePoller:
                 )
                 row = result.fetchone()
                 if row:
-                    return {"date": row[0], "has_match": row[1]}
+                    return {"date": str(row[0]), "has_match": row[1]}
         except Exception:
             pass
         return None
@@ -1000,8 +1003,8 @@ class LivePoller:
         if (
             self._today_matches_cache
             and self._today_matches_cache_date == today
-            and self._upcoming_cache_time
-            and (datetime.utcnow() - self._upcoming_cache_time).total_seconds() < cache_ttl
+            and self._today_matches_cache_time
+            and (datetime.utcnow() - self._today_matches_cache_time).total_seconds() < cache_ttl
         ):
             print(f"=== POLLER: Using cached today_matches ({len(self._today_matches_cache)} players) ===")
             return self._today_matches_cache
@@ -1120,7 +1123,7 @@ class LivePoller:
         # Cache results with timestamp
         self._today_matches_cache = today_matches
         self._today_matches_cache_date = today
-        self._upcoming_cache_time = datetime.utcnow()
+        self._today_matches_cache_time = datetime.utcnow()
         return today_matches
 
     async def _check_lineup(self, match_id: int, rapidapi_id: int, match: dict) -> str:
