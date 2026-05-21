@@ -65,8 +65,8 @@ INTERVAL_SLEEPING = 21600  # 6h - no match, recheck fixtures
 INTERVAL_PREMATCH = 1800   # 30 min - match day but not near kickoff
 INTERVAL_PREMATCH_LINEUP = 120    # 2 min - prematch near kickoff, fast transition to live
 INTERVAL_PREMATCH_KICKOFF = 60    # 1 min - kickoff passed, aggressively check if started
-INTERVAL_TRACKING = 120    # 2 min - live match, player playing
-INTERVAL_BENCH = 120       # 2 min - live match, player on bench
+INTERVAL_TRACKING = 60     # 1 min - live match, player playing
+INTERVAL_BENCH = 60        # 1 min - live match, player on bench
 PREMATCH_WINDOW_HOURS = 0.75  # 45 min - check lineups when kickoff within this many hours
 PREMATCH_WAKEUP_BUFFER_HOURS = 1.0  # wake up this long before kickoff
 
