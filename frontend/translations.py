@@ -284,7 +284,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "select_filter": "👆 Wybierz filtr powyżej, aby wyszukać",
         "cannot_compare_self": "❌ Nie można porównać zawodnika z samym sobą. Wybierz dwóch różnych zawodników.",
         "cannot_compare_gk_field": "❌ Nie można porównać bramkarza z zawodnikiem z pola",
-        "compare_position_info": "Możesz porównywać tylko bramkarzy z bramkarzami lub zawodników z pola między sobą.",
+        "compare_position_info": "Możesz porównać ze sobą tylko dwóch bramkarzy albo dwóch piłkarzy z pola.",
         "backend_not_running": "⚠️ Backend nie działa! Uruchom: `cd backend && uv run uvicorn app.main:app --reload --port 8000`",
         "premium_feature": "⭐ FUNKCJA PREMIUM",
         "no_field_players": "Brak zawodników z pola do wizualizacji heatmapy",
