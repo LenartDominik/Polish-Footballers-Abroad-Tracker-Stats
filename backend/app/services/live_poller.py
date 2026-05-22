@@ -530,7 +530,7 @@ class LivePoller:
         self._match_added_times: dict[tuple, datetime] = {}  # (match_id, rapidapi_id) -> when added
         self._status_failures: dict[tuple, int] = {}  # (match_id, rapidapi_id) -> consecutive API failures
         self._given_up_match_ids: set[int] = set()  # match_ids removed due to API failures — don't re-add
-        self._today_matches_cache: dict = {}  # cached today's matches (fixture API)
+        self._today_matches_cache: Optional[dict] = None  # cached today's matches (fixture API), None = never cached
         self._today_matches_cache_date: Optional[date] = None  # date of cached fixtures
         self._today_matches_cache_time: Optional[datetime] = None  # when today_matches were cached
 
@@ -1001,7 +1001,7 @@ class LivePoller:
         # Return cached results if fresh (within 30 minutes)
         cache_ttl = 1800  # 30 minutes
         if (
-            self._today_matches_cache
+            self._today_matches_cache is not None
             and self._today_matches_cache_date == today
             and self._today_matches_cache_time
             and (datetime.utcnow() - self._today_matches_cache_time).total_seconds() < cache_ttl
