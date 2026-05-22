@@ -766,6 +766,14 @@ class LivePoller:
 
         if not today_matches:
             self._current_matches = {}
+            if self._has_match_today:
+                # All matches for tracked teams ended — return to deep sleep
+                print("=== POLLER: All today's matches ended — returning to deep sleep ===")
+                self._fixture_check_date = None
+                self._has_match_today = False
+                self._today_matches_cache = None
+                await self._write_fixture_db_cache(date.today(), False)
+                return INTERVAL_SLEEPING  # 6h — no more matches today
             print("=== POLLER: No live matches with tracked teams yet ===")
             return INTERVAL_PREMATCH  # 30 min — match day but not live yet
 
@@ -936,6 +944,7 @@ class LivePoller:
             if match_status and match_status.get("finished"):
                 print(f"=== POLLER: Match ended match_id={match_id} ===")
                 self._current_matches.pop(match_key, None)
+                self._today_matches_cache = None  # Invalidate so next cycle gets fresh data
                 continue
 
             # Update scores and minute from match_status (single source of truth)
