@@ -654,6 +654,47 @@ class LivePoller:
         except OSError:
             pass
 
+    async def _load_cache_json(self, cache_key: str, max_age_seconds: int = 10800, for_date: Optional[date] = None):
+        """Load cached JSON data from poller_cache.cache_data column."""
+        try:
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import text
+                query = "SELECT cache_data, updated_at FROM poller_cache WHERE cache_key = :key"
+                params: dict = {"key": cache_key}
+                if for_date:
+                    query += " AND cache_date = :d"
+                    params["d"] = for_date
+                result = await session.execute(text(query), params)
+                row = result.fetchone()
+                if row and row[0]:
+                    updated_at = row[1].replace(tzinfo=None) if row[1] else None
+                    if updated_at and (datetime.utcnow() - updated_at).total_seconds() < max_age_seconds:
+                        data = row[0]
+                        if isinstance(data, str):
+                            data = json.loads(data)
+                        return data
+        except Exception:
+            pass
+        return None
+
+    async def _save_cache_json(self, cache_key: str, data) -> None:
+        """Save JSON data to poller_cache.cache_data column."""
+        try:
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import text
+                json_str = json.dumps(data, default=str)
+                await session.execute(
+                    text("DELETE FROM poller_cache WHERE cache_key = :key"),
+                    {"key": cache_key},
+                )
+                await session.execute(
+                    text("INSERT INTO poller_cache (cache_key, cache_date, has_match, cache_data, updated_at) VALUES (:key, CURRENT_DATE, false, CAST(:data AS jsonb), NOW())"),
+                    {"key": cache_key, "data": json_str},
+                )
+                await session.commit()
+        except Exception as e:
+            print(f"=== POLLER: DB cache JSON save failed for {cache_key}: {e} ===")
+
     async def _check_fixtures_today(self) -> bool:
         """Check if any tracked team has a match today.
 
@@ -1017,6 +1058,30 @@ class LivePoller:
         ):
             print(f"=== POLLER: Using cached today_matches ({len(self._today_matches_cache)} players) ===")
             return self._today_matches_cache
+
+        # DB cache (survives container restarts and long smart sleep)
+        db_cached = await self._load_cache_json("today_matches", max_age_seconds=10800, for_date=today)
+        if db_cached is not None:
+            cached_matches = {}
+            now = datetime.utcnow()
+            for k, v in db_cached.items():
+                match_info = v if isinstance(v, dict) else {}
+                kickoff_str = match_info.get("kickoff_time", "")
+                if kickoff_str:
+                    try:
+                        kickoff = datetime.fromisoformat(kickoff_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        if (now - kickoff).total_seconds() > 4 * 3600:
+                            continue
+                    except (ValueError, OSError):
+                        pass
+                cached_matches[int(k)] = match_info
+            if cached_matches:
+                self._today_matches_cache = cached_matches
+                self._today_matches_cache_date = today
+                self._today_matches_cache_time = datetime.utcnow()
+                print(f"=== POLLER: Using DB-cached today_matches ({len(cached_matches)} players) ===")
+                return cached_matches
+
         tracked_team_names = {
             info["team_name"].lower() for info in LIVE_TRACKED_PLAYERS.values()
         }
@@ -1133,6 +1198,7 @@ class LivePoller:
         self._today_matches_cache = today_matches
         self._today_matches_cache_date = today
         self._today_matches_cache_time = datetime.utcnow()
+        await self._save_cache_json("today_matches", {str(k): v for k, v in today_matches.items()})
         return today_matches
 
     async def _check_lineup(self, match_id: int, rapidapi_id: int, match: dict) -> str:
@@ -1374,6 +1440,15 @@ class LivePoller:
             if (now - self._upcoming_cache_time).total_seconds() < self._upcoming_cache_ttl:
                 filtered = [m for m in self._upcoming_cache if m.get("match_id") not in live_match_ids]
                 return filtered[:limit]
+
+        # DB cache (survives restarts)
+        db_cached = await self._load_cache_json("upcoming_matches", max_age_seconds=10800)
+        if db_cached and isinstance(db_cached, list):
+            self._upcoming_cache = db_cached
+            self._upcoming_cache_time = datetime.utcnow()
+            filtered = [m for m in db_cached if m.get("match_id") not in live_match_ids]
+            return filtered[:limit]
+
         now = datetime.utcnow()
         upcoming = []
 
@@ -1456,6 +1531,7 @@ class LivePoller:
         else:
             self._upcoming_cache_ttl = 6 * 3600  # no matches at all — recheck in 6h
 
+        await self._save_cache_json("upcoming_matches", upcoming)
         return upcoming[:limit]
 
     def is_live(self) -> bool:
