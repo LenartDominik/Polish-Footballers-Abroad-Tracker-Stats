@@ -121,25 +121,26 @@ def _find_player_in_lineup(lineup_data: dict, rapidapi_id: int, player_name: str
 
     response = lineup_data.get("response", lineup_data)
 
-    # Try both possible API response keys: "list" and "lineup"
-    for key in ("list", "lineup"):
-        lineup = response.get(key, None)
-        if lineup is None:
-            continue
+    # If response is already a flat list, skip dict-based parsing
+    if isinstance(response, dict):
+        for key in ("list", "lineup"):
+            lineup = response.get(key, None)
+            if lineup is None:
+                continue
 
-        if isinstance(lineup, dict):
-            starters = lineup.get("starters", [])
-            subs = lineup.get("subs", [])
+            if isinstance(lineup, dict):
+                starters = lineup.get("starters", [])
+                subs = lineup.get("subs", [])
 
-            for p in starters:
-                if isinstance(p, dict):
-                    if p.get("id") == rapidapi_id or _name_matches(p, player_name):
-                        return "starting"
+                for p in starters:
+                    if isinstance(p, dict):
+                        if p.get("id") == rapidapi_id or _name_matches(p, player_name):
+                            return "starting"
 
-            for p in subs:
-                if isinstance(p, dict):
-                    if p.get("id") == rapidapi_id or _name_matches(p, player_name):
-                        return "bench"
+                for p in subs:
+                    if isinstance(p, dict):
+                        if p.get("id") == rapidapi_id or _name_matches(p, player_name):
+                            return "bench"
 
     # Fallback: flat list — treat as unknown rather than assuming starting
     if isinstance(response, list):
@@ -666,7 +667,7 @@ class LivePoller:
                     params["d"] = for_date
                 result = await session.execute(text(query), params)
                 row = result.fetchone()
-                if row and row[0]:
+                if row and row[0] is not None:
                     updated_at = row[1].replace(tzinfo=None) if row[1] else None
                     if updated_at and (datetime.utcnow() - updated_at).total_seconds() < max_age_seconds:
                         data = row[0]
@@ -1436,14 +1437,14 @@ class LivePoller:
         now = datetime.utcnow()
         # Collect match_ids that are currently live/prematch in _current_matches
         live_match_ids = {mk[0] for mk, info in self._current_matches.items() if info.get("status") == "live"}
-        if self._upcoming_cache and self._upcoming_cache_time:
+        if self._upcoming_cache is not None and self._upcoming_cache_time:
             if (now - self._upcoming_cache_time).total_seconds() < self._upcoming_cache_ttl:
                 filtered = [m for m in self._upcoming_cache if m.get("match_id") not in live_match_ids]
                 return filtered[:limit]
 
         # DB cache (survives restarts)
         db_cached = await self._load_cache_json("upcoming_matches", max_age_seconds=10800)
-        if db_cached and isinstance(db_cached, list):
+        if db_cached is not None and isinstance(db_cached, list):
             self._upcoming_cache = db_cached
             self._upcoming_cache_time = datetime.utcnow()
             filtered = [m for m in db_cached if m.get("match_id") not in live_match_ids]
