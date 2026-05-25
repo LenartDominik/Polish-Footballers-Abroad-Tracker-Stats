@@ -91,6 +91,13 @@ TRACKED_LEAGUE_IDS = list({
 PRIMARY_LEAGUE_IDS = [87, 55, 61, 40, 47]  # La Liga, Serie A, Primeira Liga, Belgian, Premier League
 CUP_LEAGUE_IDS = [lid for lid in TRACKED_LEAGUE_IDS if lid not in PRIMARY_LEAGUE_IDS]
 
+OFF_SEASON_UNTIL = date(2026, 8, 10)  # Skip all API calls until new season starts (~mid-August)
+
+
+def _is_off_season() -> bool:
+    return date.today() < OFF_SEASON_UNTIL
+
+
 LEAGUE_NAMES: dict[int, str] = {
     87: "La Liga",
     55: "Serie A",
@@ -797,6 +804,9 @@ class LivePoller:
 
     async def _poll_cycle(self) -> int:
         """One polling cycle. Returns seconds until next poll."""
+        if _is_off_season():
+            return INTERVAL_SLEEPING
+
         # 1. Check if any tracked team plays today
         has_match = await self._check_fixtures_today()
 
@@ -1434,6 +1444,9 @@ class LivePoller:
     async def get_upcoming_matches(self, limit: int = 5) -> list[dict]:
         """Get upcoming matches (next 7 days) with tracked Polish players.
         Results are cached for 5 minutes. Matches currently live are excluded."""
+        if _is_off_season():
+            return []
+
         now = datetime.utcnow()
         # Collect match_ids that are currently live/prematch in _current_matches
         live_match_ids = {mk[0] for mk, info in self._current_matches.items() if info.get("status") == "live"}
