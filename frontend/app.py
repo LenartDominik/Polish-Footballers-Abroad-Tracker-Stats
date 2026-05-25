@@ -846,18 +846,34 @@ with tab3:
                                     n2.append((b/mx) * 100)
 
                             fig = go.Figure()
-                            fig.add_trace(go.Scatterpolar(r=n1+[n1[0]], theta=labels+[labels[0]], fill='toself', name=p1['name'], line_color='#FF6B6B'))
-                            fig.add_trace(go.Scatterpolar(r=n2+[n2[0]], theta=labels+[labels[0]], fill='toself', name=p2['name'], line_color='#4ECDC4'))
-                            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,100])), height=400)
-                            st.plotly_chart(fig, use_container_width=True)
+                            fig.add_trace(go.Scatterpolar(r=n1+[n1[0]], theta=labels+[labels[0]], fill='toself', name=p1['name'], line_color='#FF6B6B', opacity=0.7))
+                            fig.add_trace(go.Scatterpolar(r=n2+[n2[0]], theta=labels+[labels[0]], fill='toself', name=p2['name'], line_color='#4ECDC4', opacity=0.7))
+                            fig.update_layout(
+                                polar=dict(
+                                    radialaxis=dict(visible=True, range=[0,100], tickfont=dict(size=10)),
+                                    angularaxis=dict(tickfont=dict(size=11)),
+                                    bgcolor='rgba(0,0,0,0)',
+                                ),
+                                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5, font=dict(size=12)),
+                                height=500,
+                                margin=dict(l=40, r=40, t=60, b=40),
+                            )
+                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'modeBarButtonsToRemove': ['lasso2d', 'select2d'], 'displaylogo': False})
 
                             # Bar
                             fig2 = go.Figure([
-                                go.Bar(name=p1['name'], x=labels, y=v1, marker_color='#FF6B6B'),
-                                go.Bar(name=p2['name'], x=labels, y=v2, marker_color='#4ECDC4')
+                                go.Bar(name=p1['name'], x=labels, y=v1, marker_color='#FF6B6B', marker_line_width=0),
+                                go.Bar(name=p2['name'], x=labels, y=v2, marker_color='#4ECDC4', marker_line_width=0),
                             ])
-                            fig2.update_layout(barmode='group', height=300)
-                            st.plotly_chart(fig2, use_container_width=True)
+                            fig2.update_layout(
+                                barmode='group',
+                                height=400,
+                                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5, font=dict(size=12)),
+                                xaxis=dict(tickfont=dict(size=11)),
+                                yaxis=dict(tickfont=dict(size=10)),
+                                margin=dict(l=40, r=40, t=60, b=40),
+                            )
+                            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': True, 'modeBarButtonsToRemove': ['lasso2d', 'select2d'], 'displaylogo': False})
 
                             # Table
                             st.dataframe({"Stat": labels, p1['name']: v1, p2['name']: v2}, hide_index=True)
