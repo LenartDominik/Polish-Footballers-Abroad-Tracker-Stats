@@ -298,7 +298,7 @@ async def get_player_detailed_stats(
         )
 
     # Categorize stats
-    league_stats = None
+    league_stats_list = []
     european_stats = []
     continental_stats = []  # AFC Champions League, Copa Libertadores, etc.
     domestic_stats = []
@@ -318,7 +318,7 @@ async def get_player_detailed_stats(
         comp_out = to_comp_stats(cs)
 
         if cs.competition_type == "league":
-            league_stats = comp_out
+            league_stats_list.append(comp_out)
         elif cs.competition_type == "european":
             european_stats.append(comp_out)
         elif cs.competition_type == "continental":
@@ -369,6 +369,39 @@ async def get_player_detailed_stats(
         save_percentage=total_save_pct,
         goals_against=total_goals_against if is_goalkeeper else None,
     )
+
+    # Aggregate league stats (e.g. Bundesliga + Bundesliga Qualification)
+    league_stats = None
+    if len(league_stats_list) == 1:
+        league_stats = league_stats_list[0]
+    elif len(league_stats_list) > 1:
+        lm = sum(s.minutes_played or 0 for s in league_stats_list)
+        lg = sum(s.goals or 0 for s in league_stats_list)
+        la = sum(s.assists or 0 for s in league_stats_list)
+        lcs = sum(s.clean_sheets or 0 for s in league_stats_list)
+        ls = sum(s.saves or 0 for s in league_stats_list)
+        lga = sum(s.goals_against or 0 for s in league_stats_list)
+        ratings = [float(s.rating) for s in league_stats_list if s.rating]
+        avg_r = round(sum(ratings) / len(ratings), 2) if ratings else 0.0
+        save_pct = None
+        if is_goalkeeper and (ls + lga) > 0:
+            save_pct = round((ls / (ls + lga)) * 100, 1)
+        league_stats = CompetitionStatsOut(
+            competition_type="league",
+            competition_name="League",
+            matches_total=sum(s.matches_total or 0 for s in league_stats_list),
+            matches_started=sum(s.matches_started or 0 for s in league_stats_list),
+            minutes_played=lm,
+            goals=lg,
+            assists=la,
+            rating=avg_r,
+            g_per90=None if is_goalkeeper else (round(lg * 90 / lm, 2) if lm > 0 else 0.0),
+            a_per90=None if is_goalkeeper else (round(la * 90 / lm, 2) if lm > 0 else 0.0),
+            clean_sheets=lcs if is_goalkeeper else None,
+            saves=ls if is_goalkeeper else None,
+            save_percentage=save_pct,
+            goals_against=lga if is_goalkeeper else None,
+        )
 
     return PlayerDetailedStatsOut(
         player_id=player_id,

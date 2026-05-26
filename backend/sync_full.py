@@ -131,6 +131,8 @@ POLISH_PLAYERS = {
     558136: {"name": "Karol Świderski", "position": "FW"},
     1070709: {"name": "Filip Szymczak", "position": "FW"},
     1116774: {"name": "Łukasz Łakomy", "position": "MF"},
+    863455: {"name": "Marcin Bułka", "position": "GK"},
+    796751: {"name": "Patryk Klimala", "position": "FW"},
 }
 
 # Teams to sync with multiple competitions
@@ -180,6 +182,7 @@ TEAMS = {
         "competitions": [
             {"name": "Bundesliga", "league_id": 54},
             {"name": "DFB-Pokal", "league_id": 209},
+            {"name": "Bundesliga Qualification", "league_id": 9081},
         ],
     },
     8188: {
@@ -499,6 +502,31 @@ TEAMS = {
             {"name": "Belgian Cup", "league_id": 149},
         ],
     },
+    951893: {
+        "name": "Sabah FK",
+        "competitions": [
+            {"name": "Premier League", "league_id": 262},
+        ],
+    },
+    7981: {
+        "name": "Qarabag FK",
+        "competitions": [
+            {"name": "Premier League", "league_id": 262},
+        ],
+    },
+    1699505: {
+        "name": "Neom SC",
+        "competitions": [
+            {"name": "Saudi Pro League", "league_id": 536},
+        ],
+    },
+    92630: {
+        "name": "FC Seoul",
+        "competitions": [
+            {"name": "K League 1", "league_id": 9080},
+            {"name": "Cup", "league_id": 9551},
+        ],
+    },
 }
 
 
@@ -583,6 +611,11 @@ NICHE_LEAGUE_IDS = {
     130,     # MLS
     9441,    # US Open Cup
     10046,   # DBU Pokalen (Denmark)
+    9081,    # Bundesliga Qualification (relegation playoff)
+    262,     # Premier League (Azerbaijan)
+    536,     # Saudi Pro League
+    9080,    # K League 1 (South Korea)
+    9551,    # Korean Cup
 }
 
 
@@ -696,6 +729,10 @@ PLAYER_TEAMS = {
     558136: 10200, # Karol Świderski - Panathinaikos
     1070709: 9986, # Filip Szymczak - Sporting Charleroi
     1116774: 1773, # Łukasz Łakomy - OH Leuven
+    823121: 951893, # Tymoteusz Puchacz - Sabah FK
+    1154332: 7981,  # Mateusz Kochalski - Qarabag FK
+    863455: 1699505, # Marcin Bułka - Neom SC
+    796751: 92630,  # Patryk Klimala - FC Seoul
 }
 
 
