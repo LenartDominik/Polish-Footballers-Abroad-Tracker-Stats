@@ -240,3 +240,16 @@ cache/
 
 # Uploads
 uploads/
+
+# ============================================
+# CLAUDE CODE & LOCAL DOCS
+# ============================================
+.claude/
+.superpowers/
+PLAN_LANDING_PAGE_NEXTJS.md
+PLAN_SAAS_MIGRATION.md
+docs/
+SECURITY_AUDIT*.md
+
+# Backend tests (local only, not in repo)
+backend/tests/
