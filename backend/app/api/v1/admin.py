@@ -3,6 +3,7 @@
 import subprocess
 import asyncio
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.db.models import SyncLog
+from app.core.config import settings
 from app.notifications import send_sync_failed_email, send_sync_success_email
 
 router = APIRouter()
@@ -25,6 +27,7 @@ SYNC_SCRIPT = BACKEND_DIR / "sync_full.py"
 @router.post("/admin/sync")
 async def trigger_sync(
     player_id: int = None,
+    dry_run: bool = False,
     x_secret_key: str = Header(...),
     db: AsyncSession = Depends(get_db)
 ):
@@ -32,11 +35,15 @@ async def trigger_sync(
 
     Args:
         player_id: Optional RapidAPI player ID to sync single player
+        dry_run: Preview sync without saving to DB (~3 API calls instead of ~100)
     """
     # Verify API key
-    expected = os.environ.get("SECRET_KEY", "")
-    if not expected or x_secret_key != expected:
+    if not settings.secret_key or x_secret_key != settings.secret_key:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Validate player_id (defense in depth — prevent command injection)
+    if player_id is not None and not re.match(r"^\d+$", str(player_id)):
+        raise HTTPException(status_code=400, detail="Invalid player_id")
 
     # Create sync log
     sync_log = SyncLog(
@@ -53,6 +60,8 @@ async def trigger_sync(
         cmd = ["uv", "run", "python", str(SYNC_SCRIPT)]
         if player_id:
             cmd.extend(["--player", str(player_id)])
+        if dry_run:
+            cmd.append("--dry-run")
 
         # Run sync via subprocess (isolates from API process)
         result = await run_in_threadpool(
@@ -70,7 +79,6 @@ async def trigger_sync(
         # Parse output to get matches processed
         output = result.stdout
         players_updated = 0
-        import re
         match = re.search(r'SYNC COMPLETE:\s*(\d+)\s*matches processed', output)
         if match:
             players_updated = int(match.group(1))
