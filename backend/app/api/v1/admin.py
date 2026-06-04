@@ -27,7 +27,9 @@ SYNC_SCRIPT = BACKEND_DIR / "sync_full.py"
 
 
 @router.post("/admin/sync")
+@limiter.limit("5/minute")
 async def trigger_sync(
+    request: Request,
     player_id: int = None,
     dry_run: bool = False,
     db: AsyncSession = Depends(get_db),
