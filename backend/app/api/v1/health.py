@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,9 +40,5 @@ async def health_check_db(db: AsyncSession = Depends(get_db)):
             "database": "connected",
             "timestamp": datetime.utcnow().isoformat()
         }
-    except Exception as e:
-        return {
-            "status": "error",
-            "database": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }, 503
+    except Exception:
+        raise HTTPException(status_code=503, detail="Database unavailable")
