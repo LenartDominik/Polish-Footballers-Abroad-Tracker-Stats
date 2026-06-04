@@ -7,12 +7,13 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies import verify_admin_key
+from app.main import limiter
 from app.db.session import get_db
 from app.db.models import SyncLog
 from app.core.config import settings
@@ -140,7 +141,7 @@ async def trigger_sync(
         except Exception as e:
             print(f"Failed to send failure email: {e}")
 
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Sync failed")
 
 
 @router.get("/admin/sync/logs")
