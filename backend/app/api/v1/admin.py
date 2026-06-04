@@ -12,8 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.dependencies import verify_admin_key
-from app.main import limiter
+from app.api.v1.dependencies import verify_admin_key, limiter
 from app.db.session import get_db
 from app.db.models import SyncLog
 from app.core.config import settings

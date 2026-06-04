@@ -4,14 +4,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import structlog
 
 from app.core.config import settings
 from app.db.session import engine, init_db
 from app.api.v1 import api_router
+from app.api.v1.dependencies import limiter
 from app.services.live_poller import live_poller
 
 
@@ -37,9 +37,6 @@ structlog.configure(
 )
 
 logger = structlog.get_logger()
-
-# Rate limiter (HTTP endpoint protection)
-limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 
 @asynccontextmanager
@@ -71,8 +68,10 @@ app = FastAPI(
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
     lifespan=lifespan,
-    state=limiter.state,
 )
+
+# Connect limiter to app
+app.state.limiter = limiter
 
 # Rate limit exceeded handler
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
