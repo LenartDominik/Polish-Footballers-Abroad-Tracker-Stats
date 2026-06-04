@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_period_seconds: int = 60
 
+    # Live Poller
+    live_poller_enabled: bool = False
+
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins from comma-separated string."""

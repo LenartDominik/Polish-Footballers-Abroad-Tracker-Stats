@@ -49,8 +49,11 @@ async def lifespan(app: FastAPI):
     print("=== LIFESPAN: Database initialized ===")
 
     # Start live match poller
-    await live_poller.start()
-    print(f"=== LIFESPAN: Live poller started, is_live={live_poller.is_live()} ===")
+    if settings.live_poller_enabled:
+        await live_poller.start()
+        print(f"=== LIFESPAN: Live poller started, is_live={live_poller.is_live()} ===")
+    else:
+        print("=== LIFESPAN: Live poller disabled (LIVE_POLLER_ENABLED=false) ===")
 
     yield
 
