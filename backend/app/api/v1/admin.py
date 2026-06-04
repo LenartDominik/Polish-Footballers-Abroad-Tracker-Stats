@@ -12,6 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.dependencies import verify_admin_key
 from app.db.session import get_db
 from app.db.models import SyncLog
 from app.core.config import settings
@@ -28,8 +29,8 @@ SYNC_SCRIPT = BACKEND_DIR / "sync_full.py"
 async def trigger_sync(
     player_id: int = None,
     dry_run: bool = False,
-    x_secret_key: str = Header(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_admin_key),
 ):
     """Trigger sync with logging.
 
@@ -37,10 +38,6 @@ async def trigger_sync(
         player_id: Optional RapidAPI player ID to sync single player
         dry_run: Preview sync without saving to DB (~3 API calls instead of ~100)
     """
-    # Verify API key
-    if not settings.secret_key or x_secret_key != settings.secret_key:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
     # Validate player_id (defense in depth — prevent command injection)
     if player_id is not None and not re.match(r"^\d+$", str(player_id)):
         raise HTTPException(status_code=400, detail="Invalid player_id")
@@ -149,7 +146,8 @@ async def trigger_sync(
 @router.get("/admin/sync/logs")
 async def get_sync_logs(
     limit: int = 10,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_admin_key),
 ):
     """Get recent sync logs."""
     result = await db.execute(

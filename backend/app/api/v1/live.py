@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
+from app.api.v1.dependencies import verify_admin_key
 from app.db.models import LiveMatchEvent
 from app.db.session import get_db, AsyncSessionLocal
 from app.schemas.live import (
@@ -94,7 +95,10 @@ async def get_upcoming_matches(
 
 
 @router.get("/debug/match-status/{match_id}")
-async def debug_match_status(match_id: int):
+async def debug_match_status(
+    match_id: int,
+    _: None = Depends(verify_admin_key),
+):
     """Debug: check raw match status from RapidAPI."""
     try:
         raw = await rapidapi_client.get_match_status(match_id)
@@ -104,7 +108,10 @@ async def debug_match_status(match_id: int):
 
 
 @router.get("/debug/test-apis/{match_id}")
-async def debug_test_apis(match_id: int):
+async def debug_test_apis(
+    match_id: int,
+    _: None = Depends(verify_admin_key),
+):
     """Test all RapidAPI endpoints for a given match."""
     results = {}
 
@@ -162,7 +169,9 @@ def _summarize_lineup(data: dict) -> dict:
 
 
 @router.get("/debug/poller-state")
-async def debug_poller_state():
+async def debug_poller_state(
+    _: None = Depends(verify_admin_key),
+):
     """Debug: show poller internal state."""
     return {
         "running": live_poller._running,
