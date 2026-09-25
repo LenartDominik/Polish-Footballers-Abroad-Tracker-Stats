@@ -526,7 +526,7 @@ class LivePoller:
     def __init__(self):
         self._task: asyncio.Task | None = None
         self._running = False
-        self._current_matches: dict[int, dict] = {}  # match_id -> match info
+        self._current_matches: dict[tuple, dict] = {}  # (match_id, rapidapi_id) -> match info
         self._player_db_ids: dict[int, int] = {}  # rapidapi_id -> players.id
         self._fixture_check_date: date | None = None  # last date we checked fixtures
         self._has_match_today: bool = False  # do any tracked teams play today?
@@ -1128,6 +1128,8 @@ class LivePoller:
                                 is_finished = status.get("finished", True) if isinstance(status, dict) else True
 
                                 match_id = match.get("id")
+                                if match_id is None:
+                                    continue
                                 try:
                                     match_id = int(match_id)
                                 except (ValueError, TypeError):
@@ -1182,6 +1184,8 @@ class LivePoller:
                                     is_finished = status.get("finished", True) if isinstance(status, dict) else True
 
                                     match_id = match.get("id")
+                                    if match_id is None:
+                                        continue
                                     try:
                                         match_id = int(match_id)
                                     except (ValueError, TypeError):
@@ -1507,6 +1511,8 @@ class LivePoller:
                         team_lower = info["team_name"].lower()
                         if team_lower in home_name.lower() or team_lower in away_name.lower():
                             match_id = match.get("id")
+                            if match_id is None:
+                                continue
                             try:
                                 match_id = int(match_id)
                             except (ValueError, TypeError):
