@@ -11,6 +11,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.models import LiveMatchEvent, Player
 from app.db.session import AsyncSessionLocal
 from app.services.rapidapi import rapidapi_client
@@ -1275,7 +1276,7 @@ class LivePoller:
                         home_team=match_info.get("home_team"),
                         away_team=match_info.get("away_team"),
                         competition=match_info.get("competition"),
-                        season="2025/26",
+                        season=settings.current_season,
                     )
                     session.add(db_event)
                     await session.commit()

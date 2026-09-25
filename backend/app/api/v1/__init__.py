@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import players, leagues, health, heatmaps, admin, live
+from app.api.v1 import admin, health, heatmaps, leagues, live, players, rankings, reports
 
 api_router = APIRouter()
 
@@ -12,3 +12,5 @@ api_router.include_router(leagues.router, prefix="/leagues", tags=["leagues"])
 api_router.include_router(heatmaps.router, prefix="/players", tags=["heatmaps"])
 api_router.include_router(admin.router, tags=["admin"])
 api_router.include_router(live.router, prefix="/live", tags=["live"])
+api_router.include_router(rankings.router, prefix="/rankings", tags=["rankings"])
+api_router.include_router(reports.router, prefix="/reports", tags=["reports"])

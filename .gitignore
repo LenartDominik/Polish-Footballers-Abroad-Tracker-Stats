@@ -250,5 +250,3 @@ PLAN_SAAS_MIGRATION.md
 docs/
 SECURITY_AUDIT*.md
 
-# Backend tests (local only, not in repo)
-backend/tests/
