@@ -8,16 +8,22 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.db.session import get_db
-from app.db.models import Player, PlayerStats, PlayerStatsByCompetition
+from app.db.models import Player, PlayerMatchLog, PlayerStats, PlayerStatsByCompetition
+from app.schemas.match import MatchLogOut, PlayerFormOut
 from app.schemas.player import (
     PlayerOut, PlayerStatsOut, PlayerSearchOut,
     CompetitionStatsOut, PlayerDetailedStatsOut
 )
+from app.services.form import calculate_form_score
 import structlog
 
 router = APIRouter()
 logger = structlog.get_logger()
+
+# Form window sizes accepted by /form and /rankings/form (per media-first plan)
+FORM_MATCHES_CHOICES = (3, 5, 10)
 
 
 @router.get("/filters")
@@ -124,7 +130,7 @@ async def get_player_stats(
     Aggregates on-the-fly from PlayerStatsByCompetition to ensure data consistency.
     """
     if not season:
-        season = "2025/26"  # Default current season
+        season = settings.current_season
 
     # Get player first
     result = await db.execute(
@@ -247,7 +253,7 @@ async def get_player_detailed_stats(
 ):
     """Get player statistics broken down by competition."""
     if not season:
-        season = "2025/26"  # Default current season
+        season = settings.current_season
 
     # Get player first
     result = await db.execute(
@@ -414,4 +420,97 @@ async def get_player_detailed_stats(
         continental_stats=continental_stats,
         domestic_stats=domestic_stats,
         total=total_out,
+    )
+
+
+async def _get_player_or_404(db: AsyncSession, player_id: int) -> Player:
+    result = await db.execute(select(Player).where(Player.id == player_id))
+    player = result.scalar_one_or_none()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    return player
+
+
+def _validate_form_matches(matches: int) -> None:
+    if matches not in FORM_MATCHES_CHOICES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"matches must be one of {list(FORM_MATCHES_CHOICES)}",
+        )
+
+
+@router.get("/{player_id}/matches", response_model=List[MatchLogOut])
+async def get_player_matches(
+    player_id: int,
+    season: Optional[str] = Query(None, description="Season filter (default: current)"),
+    limit: int = Query(10, ge=1, le=50, description="Max results"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get player's latest match logs (newest first) for a season."""
+    if not season:
+        season = settings.current_season
+
+    await _get_player_or_404(db, player_id)
+
+    result = await db.execute(
+        select(PlayerMatchLog)
+        .where(
+            PlayerMatchLog.player_id == player_id,
+            PlayerMatchLog.season == season,
+        )
+        .order_by(PlayerMatchLog.match_date.desc(), PlayerMatchLog.id.desc())
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
+@router.get("/{player_id}/form", response_model=PlayerFormOut)
+async def get_player_form(
+    player_id: int,
+    season: Optional[str] = Query(None, description="Season filter (default: current)"),
+    matches: int = Query(5, description="Form window size (3, 5 or 10)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get player form over the last N matches (position-specific scoring)."""
+    if not season:
+        season = settings.current_season
+
+    _validate_form_matches(matches)
+    player = await _get_player_or_404(db, player_id)
+
+    result = await db.execute(
+        select(PlayerMatchLog)
+        .where(
+            PlayerMatchLog.player_id == player_id,
+            PlayerMatchLog.season == season,
+        )
+        .order_by(PlayerMatchLog.match_date.desc())
+    )
+    logs = result.scalars().all()
+
+    form = calculate_form_score(logs, position=player.position or "field", matches=matches)
+
+    if form is None:
+        return PlayerFormOut(
+            player_id=player_id,
+            player_name=player.name,
+            player_position=player.position,
+            season=season,
+            matches=matches,
+            message=f"No match data for season {season}",
+        )
+
+    return PlayerFormOut(
+        player_id=player_id,
+        player_name=player.name,
+        player_position=player.position,
+        season=season,
+        matches=matches,
+        score=form.score,
+        matches_count=form.matches_count,
+        goals=form.goals,
+        assists=form.assists,
+        minutes=form.minutes,
+        avg_rating=round(form.avg_rating, 2) if form.avg_rating is not None else None,
+        clean_sheets=form.clean_sheets,
     )
