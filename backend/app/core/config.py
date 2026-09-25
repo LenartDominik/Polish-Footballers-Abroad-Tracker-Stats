@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
 
+    # Season - single source of truth (env: CURRENT_SEASON)
+    # NOTE: deploy requires 2026/27 data backfilled first (see PLAN_MEDIA_FIRST_MVP.md, Sekcja 8.1)
+    current_season: str = "2026/27"
+
     # Database
     database_url: str
     supabase_url: str

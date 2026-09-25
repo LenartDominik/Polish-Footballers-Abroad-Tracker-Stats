@@ -7,7 +7,7 @@ import argparse
 import asyncio
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from collections import defaultdict
 # position is tracked via POLISH_PLAYERS dict
 from typing import Any, TypedDict
@@ -53,14 +53,16 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 import httpx
 from dotenv import load_dotenv
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
+
+from app.core.config import get_settings
 
 load_dotenv()
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
-from app.db.models import Player, PlayerStats, PlayerStatsByCompetition, SyncState, SyncedMatch, PlayerHeatmapPosition
+from app.db.models import Player, PlayerStats, PlayerStatsByCompetition, SyncState, SyncedMatch, PlayerHeatmapPosition, PlayerMatchLog
 from app.services.rapidapi import calculate_per_90
 from app.services.rate_limiter import RateLimiter, InMemoryRateLimiter, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_HOUR, MAX_REQUESTS_PER_MONTH
 
@@ -534,7 +536,8 @@ TEAMS = {
 
 
 
-CURRENT_SEASON = "2025/26"
+# Single source of truth: app/core/config.py (env: CURRENT_SEASON)
+CURRENT_SEASON = get_settings().current_season
 CACHE_TTL_HOURS = 24
 SYNC_INTERVAL_HOURS = 12  # Minimum time between syncs
 API_RETRY_ATTEMPTS = 3  # Retry failed API responses
@@ -795,6 +798,79 @@ async def mark_match_synced(session, match_id: int, team_id: int, competition_id
     await session.execute(stmt)
 
 
+def _to_float_or_none(value) -> float | None:
+    """Convert API rating to float, tolerating None/strings/garbage."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def build_match_log_values(parsed: dict | None, player_lineup: dict) -> dict:
+    """Build appearance fields for player_match_logs from parsed performance.
+
+    parsed=None (player without minutes and events) -> appearance='bench'.
+    Pure function - testable without a database.
+    """
+    rating = _to_float_or_none(player_lineup.get("performance", {}).get("rating"))
+    if not parsed or parsed["minutes"] == 0:
+        return {
+            "minutes": 0, "goals": 0, "assists": 0,
+            "yellow_cards": 0, "red_cards": 0,
+            "appearance": "bench", "rating": rating,
+        }
+    return {
+        "minutes": parsed["minutes"],
+        "goals": parsed["goals"],
+        "assists": parsed["assists"],
+        "yellow_cards": parsed["yellow_cards"],
+        "red_cards": parsed["red_cards"],
+        "appearance": "start" if parsed["started"] else "sub",
+        "rating": rating,
+    }
+
+
+async def save_match_log(session, player_db_id: int, event_id: int, match: dict,
+                         comp_type: str, comp_name: str, comp_id: int,
+                         is_home: bool, values: dict) -> bool:
+    """Upsert one appearance row into player_match_logs (idempotent, media-first).
+
+    Same upsert pattern as heatmaps: reprocessing a match overwrites the row
+    with fresh data instead of duplicating it.
+
+    Returns False when match date is unknown (match_date is NOT NULL in DB —
+    log is skipped, aggregates are unaffected).
+    """
+    match_dt = match.get("match_date")
+    if match_dt is None:
+        return False
+
+    opponent = (match.get("away_name") if is_home else match.get("home_name")) or "Unknown"
+
+    row = {
+        "player_id": player_db_id,
+        "match_id": event_id,
+        "season": CURRENT_SEASON,
+        "match_date": match_dt.date(),
+        "competition_name": comp_name,
+        "competition_type": comp_type,
+        "competition_id": comp_id,
+        "opponent": opponent,
+        "is_home": is_home,
+        "score": match.get("score"),
+        **values,
+    }
+    stmt = insert(PlayerMatchLog).values(**row).on_conflict_do_update(
+        constraint="uq_match_log_player_match",
+        # Update everything: API revisions always win (plan Sekcja 6, risk #7)
+        set_=row,
+    )
+    await session.execute(stmt)
+    return True
+
+
 async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filter: list[int] | None = None) -> int:
     """Sync Polish players with incremental support and per-competition stats.
 
@@ -826,6 +902,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
         # Track processed matches for dedup
         matches_processed = 0
         api_calls = 0
+        logs_skipped_no_date = 0  # Match logs skipped: API returned no match date
         new_matches_synced = 0  # Track total new matches synced across all competitions
 
         for competition in team_info.get("competitions", []):
@@ -871,8 +948,9 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
 
             print(f"   API returned {len(matches)} total matches")
 
-            # Filter: team matches + finished
+            # Filter: team matches + finished + current season only
             team_matches = []
+            skipped_old_season = 0
 
             for m in matches:
                 if not isinstance(m, dict):
@@ -891,14 +969,30 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                 is_finished = status.get("finished", False) if isinstance(status, dict) else False
 
                 if (home_id == team_id or away_id == team_id) and is_finished:
+                    match_date = _extract_match_date(m)
+                    # Old-season guard (Sekcja 8.3): matches before the season
+                    # start must never be processed, also in --full backfill.
+                    if not is_in_current_season(match_date, CURRENT_SEASON):
+                        skipped_old_season += 1
+                        continue
                     team_matches.append({
                         "event_id": m.get("id"),
                         "is_home": home_id == team_id,
                         "home_name": home.get("name"),
                         "away_name": away.get("name"),
+                        # Data + wynik z listy meczów (bez dodatkowych wywołań API);
+                        # None gdy API nie zwraca pola — weryfikacja nazw przy 1. prawdziwym syncu
+                        "match_date": match_date,
+                        "score": _extract_match_score(m),
                     })
 
             print(f"   {team_info['name']} finished matches: {len(team_matches)}")
+            if skipped_old_season:
+                print(f"   ⏭️ {skipped_old_season} skipped (before {CURRENT_SEASON} start)")
+            missing_dates = sum(1 for tm in team_matches if tm["match_date"] is None)
+            if missing_dates:
+                print(f"   ⚠️ {missing_dates}/{len(team_matches)} matches without date")
+                print("      -> check API date field name (startTimestamp?) on 1st real sync")
 
             if not team_matches:
                 continue
@@ -949,6 +1043,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                     all_players = starters + subs
 
                     found_players = []
+                    bench_players = []  # Polish players in lineup without minutes (media-first)
                     gk_playing = None
                     processed_players = set()  # Dedup: prevent counting same player twice
 
@@ -971,10 +1066,8 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                         is_starter = player_rapid_id in starter_ids
                         parsed = parse_player_performance(player, is_starter)
 
-                        if not parsed or parsed["minutes"] == 0:
-                            continue
-
-                        # Get or create player in DB
+                        # Get or create player in DB — before the minutes filter:
+                        # bench players get a match log row too (media-first)
                         result = await session.execute(
                             select(Player).where(Player.rapidapi_id == player_rapid_id)
                         )
@@ -994,6 +1087,25 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                             # Update existing player info (position, team)
                             player_db.position = POLISH_PLAYERS[player_rapid_id]["position"]
                             player_db.team = team_info["name"]
+
+                        # Save match log (idempotent upsert): start / sub / bench
+                        log_values = build_match_log_values(parsed, player)
+                        try:
+                            saved = await save_match_log(
+                                session, player_db.id, event_id, match,
+                                comp_type, comp_name, comp_id, is_home, log_values,
+                            )
+                            if not saved:
+                                logs_skipped_no_date += 1
+                        except Exception as e:
+                            print(f"   ⚠️ Match log save error: {e}")
+
+                        if not parsed or parsed["minutes"] == 0:
+                            # Bench only: no aggregate changes (counters only grow
+                            # for appearances with minutes)
+                            bench_name = POLISH_PLAYERS[player_rapid_id]["name"]
+                            bench_players.append(f"{bench_name} (bench)")
+                            continue
 
                         # Update stats for this competition
                         stats = stats_by_competition[(comp_type, comp_name, comp_id)][player_db.id]
@@ -1056,7 +1168,7 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                                     stmt = insert(PlayerHeatmapPosition).values(
                                         player_id=player_db.id,
                                         match_id=event_id,
-                                        season="2025/26",
+                                        season=CURRENT_SEASON,
                                         pos_x=pos_x_val,
                                         pos_y=pos_y_val,
                                         zone_width=zone_w,
@@ -1110,6 +1222,9 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
                         matches_processed += 1
                     else:
                         print(f"[{event_id}] no Polish players found — will retry next sync")
+
+                    if bench_players:
+                        print(f"   Bench (no minutes): {', '.join(bench_players)}")
 
                     await asyncio.sleep(0.1)
 
@@ -1244,6 +1359,10 @@ async def sync_team_v2(team_id: int, team_info: dict, session, args, player_filt
 
         # Aggregate to Season Total (player_stats)
         await aggregate_to_season_total(session, player_filter)
+
+        if logs_skipped_no_date:
+            print(f"\n   ⚠️ {logs_skipped_no_date} match logs skipped (no match date from API)")
+            print("      -> check API date field name (startTimestamp?) on 1st real sync")
 
         return matches_processed
 
@@ -1389,10 +1508,34 @@ async def aggregate_to_season_total(session, player_filter: list[int] | None = N
         print(f"   {player.name}: {total['matches_total']} matches, {total['goals']}G, {total['assists']}A")
 
 
+def season_start_date(season: str) -> date:
+    """Start of the season window: '2026/27' -> Aug 1, 2026 (European calendar)."""
+    return date(int(season.split("/")[0]), 8, 1)
+
+
+def is_in_current_season(match_date: datetime | date | None, season: str) -> bool:
+    """Old-season guard: never process matches from before the season start.
+
+    Without this, a --full backfill would stamp old-season matches with the
+    current season and corrupt the new season's aggregates. None (unknown
+    date — API field not yet verified) is kept: a hard skip could silently
+    drop everything if the field name turns out wrong.
+    """
+    if match_date is None:
+        return True
+    match_day = match_date.date() if isinstance(match_date, datetime) else match_date
+    return match_day >= season_start_date(season)
+
+
 def _extract_match_date(match: dict) -> datetime | None:
     """Extract date from match data. Tries multiple field names from the API."""
     # Try common date field names from RapidAPI Football
-    for field in ["date", "start_date", "timestamp", "kickoff", "datetime", "utcDate"]:
+    # ("startTimestamp" = unix seconds, SofaScore-style match lists)
+    date_fields = [
+        "startTimestamp", "date", "start_date", "timestamp",
+        "kickoff", "datetime", "utcDate",
+    ]
+    for field in date_fields:
         val = match.get(field)
         if val:
             try:
@@ -1419,6 +1562,30 @@ def _extract_match_date(match: dict) -> datetime | None:
                         return datetime.fromisoformat(val)
                 except (ValueError, OSError):
                     continue
+    return None
+
+
+def _extract_match_score(match: dict) -> str | None:
+    """Extract final score ('2:1') from match list data without extra API calls.
+
+    Returns None when the API response doesn't include a score — safe fallback
+    (plan Sekcja 3B: no extra API calls just for score).
+    """
+    def _is_int(v) -> bool:
+        # bool is a subclass of int in Python — exclude it explicitly
+        return isinstance(v, int) and not isinstance(v, bool)
+
+    # SofaScore-style nested scores
+    home_score = match.get("homeScore", {})
+    away_score = match.get("awayScore", {})
+    if isinstance(home_score, dict) and isinstance(away_score, dict):
+        h, a = home_score.get("current"), away_score.get("current")
+        if _is_int(h) and _is_int(a):
+            return f"{h}:{a}"
+    # Flat variants
+    h, a = match.get("home_score"), match.get("away_score")
+    if _is_int(h) and _is_int(a):
+        return f"{h}:{a}"
     return None
 
 
@@ -1882,6 +2049,16 @@ async def main():
     total_matches = 0
 
     async with AsyncSessionLocal() as session:
+        # Advisory lock (Sekcja 3D planu): drugi równoległy sync (np. zombie proces)
+        # czeka w kolejce zamiast ścigać się i podwajać liczniki.
+        # Blokada transakcyjna — zwalnia się automatycznie przy commit/rollback,
+        # więc nie da się jej zgubić nawet przy padzie procesu.
+        # Pomijamy w --dry-run (podgląd nie zapisuje danych, nie potrzebuje wyłączności).
+        if not args.dry_run:
+            print("🔒 Biorę blokadę syncu (jeśli inny sync działa — czekam w kolejce)...")
+            await session.execute(text("SELECT pg_advisory_xact_lock(85010001)"))
+            print("🔒 Blokada pobrana — jestem jedynym aktywnym syncem")
+
         teams_to_sync = {args.team: TEAMS[args.team]} if args.team and args.team in TEAMS else TEAMS
 
         for team_id, team_info in teams_to_sync.items():

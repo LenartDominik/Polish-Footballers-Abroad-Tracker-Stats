@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.db.models import Player, PlayerHeatmapPosition
 from app.schemas.heatmap import (
@@ -23,7 +24,7 @@ router = APIRouter()
 @router.get("/{player_id}/heatmap", response_model=PlayerSeasonHeatmapOut)
 async def get_player_heatmap(
     player_id: int,
-    season: str = Query("2025/26", description="Season filter"),
+    season: str = Query(default=settings.current_season, description="Season filter"),
     competition_type: Optional[str] = Query(
         None, description="Filter by competition type (league, european, domestic)"
     ),

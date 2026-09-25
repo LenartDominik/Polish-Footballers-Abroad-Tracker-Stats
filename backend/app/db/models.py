@@ -1,19 +1,19 @@
 """SQLAlchemy database models."""
 
-from datetime import datetime
-from typing import Optional
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
-    Integer,
-    String,
-    Text,
-    Numeric,
+    Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
     UniqueConstraint,
-    Boolean,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,11 +26,11 @@ class Player(Base):
     __tablename__ = "players"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    rapidapi_id: Mapped[Optional[int]] = mapped_column(Integer, unique=True, index=True)
+    rapidapi_id: Mapped[int | None] = mapped_column(Integer, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    position: Mapped[Optional[str]] = mapped_column(String(10))  # FW, MF, DF, GK
-    team: Mapped[Optional[str]] = mapped_column(String(100), index=True)
-    league: Mapped[Optional[str]] = mapped_column(String(50))
+    position: Mapped[str | None] = mapped_column(String(10))  # FW, MF, DF, GK
+    team: Mapped[str | None] = mapped_column(String(100), index=True)
+    league: Mapped[str | None] = mapped_column(String(50))
     nationality: Mapped[str] = mapped_column(String(30), default="Poland")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -46,6 +46,9 @@ class Player(Base):
     )
     heatmap_positions: Mapped[list["PlayerHeatmapPosition"]] = relationship(
         "PlayerHeatmapPosition", back_populates="player", cascade="all, delete-orphan"
+    )
+    match_logs: Mapped[list["PlayerMatchLog"]] = relationship(
+        "PlayerMatchLog", back_populates="player", cascade="all, delete-orphan"
     )
 
 
@@ -96,7 +99,7 @@ class PlayerStats(Base):
 
     # Cache
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     # Relationships
     player: Mapped["Player"] = relationship("Player", back_populates="stats")
@@ -108,9 +111,9 @@ class League(Base):
     __tablename__ = "leagues"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    rapidapi_id: Mapped[Optional[int]] = mapped_column(Integer, unique=True)
-    name: Mapped[Optional[str]] = mapped_column(String(100))
-    country: Mapped[Optional[str]] = mapped_column(String(50))
+    rapidapi_id: Mapped[int | None] = mapped_column(Integer, unique=True)
+    name: Mapped[str | None] = mapped_column(String(100))
+    country: Mapped[str | None] = mapped_column(String(50))
 
 
 class PlayerStatsByCompetition(Base):
@@ -132,7 +135,7 @@ class PlayerStatsByCompetition(Base):
     season: Mapped[str] = mapped_column(String(10))
     competition_type: Mapped[str] = mapped_column(String(20))  # league, european, domestic
     competition_name: Mapped[str] = mapped_column(String(50))
-    competition_id: Mapped[Optional[int]] = mapped_column(Integer)
+    competition_id: Mapped[int | None] = mapped_column(Integer)
 
     # Match stats
     matches_total: Mapped[int] = mapped_column(Integer, default=0)
@@ -152,15 +155,15 @@ class PlayerStatsByCompetition(Base):
     rating: Mapped[float] = mapped_column(Numeric(4, 2), default=0)
 
     # Goalkeeper stats (nullable)
-    clean_sheets: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    saves: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    save_percentage: Mapped[Optional[float]] = mapped_column(Numeric(6, 2), nullable=True)
-    goals_against: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    shots_on_target_against: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    clean_sheets: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    saves: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    save_percentage: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+    goals_against: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shots_on_target_against: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Cache
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     # Relationships
     player: Mapped["Player"] = relationship("Player", back_populates="stats_by_competition")
@@ -178,15 +181,15 @@ class SyncState(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     team_id: Mapped[int] = mapped_column(Integer)
-    team_name: Mapped[Optional[str]] = mapped_column(String(100))
+    team_name: Mapped[str | None] = mapped_column(String(100))
     competition_id: Mapped[int] = mapped_column(Integer)
-    competition_name: Mapped[Optional[str]] = mapped_column(String(100))
+    competition_name: Mapped[str | None] = mapped_column(String(100))
     season: Mapped[str] = mapped_column(String(10), default="2025/26")
 
-    last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    last_match_id: Mapped[Optional[int]] = mapped_column(Integer)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_match_id: Mapped[int | None] = mapped_column(Integer)
     matches_synced: Mapped[int] = mapped_column(Integer, default=0)
-    next_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class SyncedMatch(Base):
@@ -227,9 +230,9 @@ class PlayerHeatmapPosition(Base):
     zone_height: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
 
     # Match metadata
-    competition_name: Mapped[Optional[str]] = mapped_column(String(100))
-    competition_type: Mapped[Optional[str]] = mapped_column(String(20))  # league, european, domestic
-    formation: Mapped[Optional[str]] = mapped_column(String(20))
+    competition_name: Mapped[str | None] = mapped_column(String(100))
+    competition_type: Mapped[str | None] = mapped_column(String(20))  # league, european, domestic
+    formation: Mapped[str | None] = mapped_column(String(20))
     minutes_played: Mapped[int] = mapped_column(Integer, default=0)
     is_starter: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -263,11 +266,11 @@ class SyncLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     sync_type: Mapped[str] = mapped_column(String(20), default="scheduled")
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="running")  # running, success, failed
     players_updated: Mapped[int] = mapped_column(Integer, default=0)
     api_calls_used: Mapped[int] = mapped_column(Integer, default=0)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class LiveMatchEvent(Base):
@@ -275,7 +278,9 @@ class LiveMatchEvent(Base):
 
     __tablename__ = "live_match_events"
     __table_args__ = (
-        UniqueConstraint("match_id", "player_id", "event_type", "minute", name="uq_live_event_dedup"),
+        UniqueConstraint(
+            "match_id", "player_id", "event_type", "minute", name="uq_live_event_dedup"
+        ),
         Index("idx_live_events_match", "match_id"),
         Index("idx_live_events_player", "player_id"),
         Index("idx_live_events_created", "created_at"),
@@ -283,13 +288,81 @@ class LiveMatchEvent(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     match_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    player_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("players.id", ondelete="SET NULL"))
+    player_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("players.id", ondelete="SET NULL")
+    )
     player_name: Mapped[str] = mapped_column(String(100), nullable=False)
     event_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'goal', 'assist'
-    minute: Mapped[Optional[int]] = mapped_column(Integer)
-    match_score: Mapped[Optional[str]] = mapped_column(String(20))  # "2:1"
-    home_team: Mapped[Optional[str]] = mapped_column(String(100))
-    away_team: Mapped[Optional[str]] = mapped_column(String(100))
-    competition: Mapped[Optional[str]] = mapped_column(String(100))
-    season: Mapped[Optional[str]] = mapped_column(String(10))
+    minute: Mapped[int | None] = mapped_column(Integer)
+    match_score: Mapped[str | None] = mapped_column(String(20))  # "2:1"
+    home_team: Mapped[str | None] = mapped_column(String(100))
+    away_team: Mapped[str | None] = mapped_column(String(100))
+    competition: Mapped[str | None] = mapped_column(String(100))
+    season: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PlayerMatchLog(Base):
+    """One row = one player appearance in one match (media-first MVP)."""
+
+    __tablename__ = "player_match_logs"
+    __table_args__ = (
+        UniqueConstraint("player_id", "match_id", name="uq_match_log_player_match"),
+        Index("idx_match_logs_player_date", "player_id", "match_date"),
+        Index("idx_match_logs_date", "match_date"),
+        Index("idx_match_logs_season", "season"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    player_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("players.id", ondelete="CASCADE"), nullable=False
+    )
+    match_id: Mapped[int] = mapped_column(Integer, nullable=False)  # RapidAPI event id
+    season: Mapped[str] = mapped_column(String(10), nullable=False)
+    match_date: Mapped[date] = mapped_column(Date, nullable=False)  # UTC
+
+    competition_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # league / european / domestic
+    competition_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    competition_id: Mapped[int | None] = mapped_column(Integer)
+
+    opponent: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_home: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    score: Mapped[str | None] = mapped_column(String(20))  # "2:1"
+
+    minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    goals: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    assists: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    yellow_cards: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    red_cards: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    appearance: Mapped[str] = mapped_column(String(10), nullable=False)  # start/sub/bench
+    rating: Mapped[float | None] = mapped_column(Numeric(4, 2))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    player: Mapped["Player"] = relationship("Player", back_populates="match_logs")
+
+
+class WeeklyReport(Base):
+    """Weekly report: system generates draft from match logs, user publishes (media-first MVP)."""
+
+    __tablename__ = "weekly_reports"
+    __table_args__ = (
+        UniqueConstraint("period_start", "period_end", name="uq_report_period"),
+        Index("idx_reports_season", "season"),
+        Index("idx_reports_status", "status", "period_start"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    season: Mapped[str] = mapped_column(String(10), nullable=False)
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    editorial_comment: Mapped[str | None] = mapped_column(Text)
+    # draft / published
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
