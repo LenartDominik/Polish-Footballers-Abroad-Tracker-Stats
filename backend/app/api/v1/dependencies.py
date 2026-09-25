@@ -1,5 +1,7 @@
 """Shared API dependencies."""
 
+import secrets
+
 from fastapi import Header, HTTPException
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -13,7 +15,9 @@ async def verify_admin_key(x_secret_key: str = Header(...)):
     Used to protect admin and debug endpoints.
     Header name: x-secret-key
     """
-    if not settings.secret_key or x_secret_key != settings.secret_key:
+    if not settings.secret_key or not secrets.compare_digest(
+        x_secret_key, settings.secret_key
+    ):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
