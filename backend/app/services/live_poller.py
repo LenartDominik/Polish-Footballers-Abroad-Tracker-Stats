@@ -4,12 +4,10 @@ import asyncio
 import json
 import os
 import tempfile
-from datetime import datetime, date, timedelta
-from typing import Optional
+from datetime import date, datetime, timedelta
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.models import LiveMatchEvent, Player
@@ -190,7 +188,7 @@ def _collect_all_dicts(data, depth=0):
     return result
 
 
-def _parse_live_match(match_data: dict) -> Optional[dict]:
+def _parse_live_match(match_data: dict) -> dict | None:
     """Parse a live match from API response into standard format.
 
     Handles multiple formats:
@@ -278,7 +276,7 @@ def _parse_live_match(match_data: dict) -> Optional[dict]:
     }
 
 
-def _parse_match_status(status_data: dict) -> Optional[dict]:
+def _parse_match_status(status_data: dict) -> dict | None:
     """Parse match status endpoint response for minute and score."""
     if not status_data or not isinstance(status_data, dict):
         return None
@@ -526,22 +524,22 @@ class LivePoller:
     """Background service that polls for live matches and saves events."""
 
     def __init__(self):
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._running = False
         self._current_matches: dict[int, dict] = {}  # match_id -> match info
         self._player_db_ids: dict[int, int] = {}  # rapidapi_id -> players.id
-        self._fixture_check_date: Optional[date] = None  # last date we checked fixtures
+        self._fixture_check_date: date | None = None  # last date we checked fixtures
         self._has_match_today: bool = False  # do any tracked teams play today?
         self._cycle_count: int = 0  # track cycles for lineup check throttling
         self._upcoming_cache: list[dict] = []  # cached upcoming matches
-        self._upcoming_cache_time: Optional[datetime] = None  # when cache was set
+        self._upcoming_cache_time: datetime | None = None  # when cache was set
         self._upcoming_cache_ttl: int = 3600  # 1 hour — upcoming matches rarely change
         self._match_added_times: dict[tuple, datetime] = {}  # (match_id, rapidapi_id) -> when added
         self._status_failures: dict[tuple, int] = {}  # (match_id, rapidapi_id) -> consecutive API failures
         self._given_up_match_ids: set[int] = set()  # match_ids removed due to API failures — don't re-add
-        self._today_matches_cache: Optional[dict] = None  # cached today's matches (fixture API), None = never cached
-        self._today_matches_cache_date: Optional[date] = None  # date of cached fixtures
-        self._today_matches_cache_time: Optional[datetime] = None  # when today_matches were cached
+        self._today_matches_cache: dict | None = None  # cached today's matches (fixture API), None = never cached
+        self._today_matches_cache_date: date | None = None  # date of cached fixtures
+        self._today_matches_cache_time: datetime | None = None  # when today_matches were cached
 
     async def start(self):
         """Start the background poller."""
@@ -597,7 +595,7 @@ class LivePoller:
                 await asyncio.sleep(sleep_chunk)
                 sleep_remaining -= sleep_chunk
 
-    def _earliest_kickoff_today(self, today_matches: dict) -> Optional[datetime]:
+    def _earliest_kickoff_today(self, today_matches: dict) -> datetime | None:
         """Find earliest future kickoff from today's matches."""
         earliest = None
         now = datetime.utcnow()
@@ -613,7 +611,7 @@ class LivePoller:
                 continue
         return earliest
 
-    async def _read_fixture_db_cache(self) -> Optional[dict]:
+    async def _read_fixture_db_cache(self) -> dict | None:
         """Read fixture check result from Supabase (survives container restarts)."""
         try:
             async with AsyncSessionLocal() as session:
@@ -643,10 +641,10 @@ class LivePoller:
         except Exception as e:
             print(f"=== POLLER: DB cache write failed: {e} ===")
 
-    def _read_fixture_file_cache(self) -> Optional[dict]:
+    def _read_fixture_file_cache(self) -> dict | None:
         """Read fixture check result from file cache (fallback)."""
         try:
-            with open(_FIXTURE_CACHE_FILE, "r") as f:
+            with open(_FIXTURE_CACHE_FILE) as f:
                 data = json.load(f)
             return data
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
@@ -663,7 +661,7 @@ class LivePoller:
         except OSError:
             pass
 
-    async def _load_cache_json(self, cache_key: str, max_age_seconds: int = 10800, for_date: Optional[date] = None):
+    async def _load_cache_json(self, cache_key: str, max_age_seconds: int = 10800, for_date: date | None = None):
         """Load cached JSON data from poller_cache.cache_data column."""
         try:
             async with AsyncSessionLocal() as session:
