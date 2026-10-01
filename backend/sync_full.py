@@ -82,7 +82,6 @@ POLISH_PLAYERS = {
     1021834: {"name": "Jakub Kiwior", "position": "DF"},
     760722: {"name": "Kamil Grabara", "position": "GK"},
     908847: {"name": "Mateusz Żukowski", "position": "FW"},
-    630036: {"name": "Mateusz Lis", "position": "GK"},
     954194: {"name": "Mateusz Bogusz", "position": "MF"},
     742332: {"name": "Bartosz Slisz", "position": "MF"},
     1051411: {"name": "Kacper Kozłowski", "position": "MF"},
@@ -93,7 +92,6 @@ POLISH_PLAYERS = {
     1800401: {"name": "Kacper Potulski", "position": "DF"},
     361712: {"name": "Adam Dźwigała", "position": "DF"},
     1112702: {"name": "Arkadiusz Pyrka", "position": "MF"},
-    502543: {"name": "Dawid Kownacki", "position": "FW"},
     1053713: {"name": "Maik Nawrocki", "position": "DF"},
     1065940: {"name": "Michał Karbownik", "position": "DF"},
     1355526: {"name": "Maxi Oyedele", "position": "MF"},
@@ -110,14 +108,10 @@ POLISH_PLAYERS = {
     862717: {"name": "Przemysław Płacheta", "position": "MF"},
     178732: {"name": "Łukasz Skorupski", "position": "GK"},
     556952: {"name": "Krystian Bielik", "position": "DF"},
-    198099: {"name": "Bartosz Bereszyński", "position": "DF"},
     920861: {"name": "Adrian Benedyczak", "position": "FW"},
-    1154332: {"name": "Mateusz Kochalski", "position": "GK"},
     823121: {"name": "Tymoteusz Puchacz", "position": "DF"},
-    1380468: {"name": "Jan Faberski", "position": "MF"},
     943056: {"name": "Daniel Bielica", "position": "GK"},
     306174: {"name": "Tomasz Kędziora", "position": "DF"},
-    361403: {"name": "Karol Linetty", "position": "MF"},
     724909: {"name": "Radosław Majecki", "position": "GK"},
     815981: {"name": "Konrad Michalak", "position": "FW"},
     943059: {"name": "Cezary Miszta", "position": "GK"},
@@ -127,11 +121,7 @@ POLISH_PLAYERS = {
     1276988: {"name": "Dariusz Stalmach", "position": "MF"},
     954190: {"name": "Michał Skóraś", "position": "MF"},
     860592: {"name": "Sebastian Walukiewicz", "position": "DF"},
-    555646: {"name": "Mateusz Wieteska", "position": "DF"},
     729731: {"name": "Matty Cash", "position": "DF"},
-    1229761: {"name": "Mateusz Łęgowski", "position": "MF"},
-    558136: {"name": "Karol Świderski", "position": "FW"},
-    1070709: {"name": "Filip Szymczak", "position": "FW"},
     1116774: {"name": "Łukasz Łakomy", "position": "MF"},
     863455: {"name": "Marcin Bułka", "position": "GK"},
     796751: {"name": "Patryk Klimala", "position": "FW"},
@@ -194,13 +184,6 @@ TEAMS = {
             {"name": "DFB-Pokal", "league_id": 209},
         ],
     },
-    1925:{
-        "name": "Göztepe",
-        "competitions": [
-            {"name": "Super Lig", "league_id": 71},
-            {"name": "Turkish Cup", "league_id": 151},
-        ],
-    },
     8259: {
         "name": "Houston Dynamo FC",
         "competitions": [
@@ -230,27 +213,12 @@ TEAMS = {
             {"name": "Champions League", "league_id": 42},
         ]
     },
-    8686: {
-        "name": "AS Roma",
-        "competitions": [
-            {"name": "Serie A", "league_id": 55},
-            {"name": "Coppa Italia", "league_id": 141},
-            {"name": "Europa League", "league_id": 73},
-        ]
-},
     8600: {
         "name": "Udinese",
         "competitions": [
             {"name": "Serie A", "league_id": 55},
             {"name": "Coppa Italia", "league_id": 141},
         ]
-    },
-    8722: {
-        "name": "1. FC Köln",
-        "competitions": [
-            {"name": "Bundesliga", "league_id": 54},
-            {"name": "DFB-Pokal", "league_id": 209},
-        ],
     },
     9905: {
         "name": "Mainz 05",
@@ -265,20 +233,6 @@ TEAMS = {
         "name": "St. Pauli",
         "competitions": [
             {"name": "Bundesliga", "league_id": 54},
-            {"name": "DFB-Pokal", "league_id": 209},
-        ],
-    },
-    8177: {
-        "name": "Hertha BSC",
-        "competitions": [
-            {"name": "2. Bundesliga", "league_id": 146},
-            {"name": "DFB-Pokal", "league_id": 209},
-        ],
-    },
-    9904: {
-        "name": "Hannover 96",
-        "competitions": [
-            {"name": "2. Bundesliga", "league_id": 146},
             {"name": "DFB-Pokal", "league_id": 209},
         ],
     },
@@ -312,13 +266,6 @@ TEAMS = {
             {"name": "KNVB Cup", "league_id": 235},
         ],
 },
-    10218: {
-        "name": "Excelsior",
-        "competitions": [
-            {"name": "Eredivisie", "league_id": 57},
-            {"name": "KNVB Cup", "league_id": 235}, 
-        ],
-    },
     9885:
     {
         "name": "Juventus",
@@ -360,14 +307,6 @@ TEAMS = {
         ],
 
 },
-    8659: {
-        "name": "West Bromwich Albion",
-        "competitions": [
-            {"name": "Championship", "league_id": 48},
-            {"name": "FA Cup", "league_id": 132},
-            {"name": "EFL Cup", "league_id": 133},
-        ],
-    },
     8540: {
         "name": "Palermo",
         "competitions": [
@@ -380,50 +319,6 @@ TEAMS = {
         "competitions": [
             {"name": "Süper Lig", "league_id": 71},
             {"name": "Turkish Cup", "league_id": 151},
-        ],
-    },
-    6413: {
-        "name": "PEC Zwolle",
-        "competitions": [
-            {"name": "Eredivisie", "league_id": 57},
-            {"name": "KNVB Cup", "league_id": 235},
-        ],
-    },
-    9761: {
-        "name": "NAC Breda",
-        "competitions": [
-            {"name": "Eredivisie", "league_id": 57},
-            {"name": "KNVB Cup", "league_id": 235},
-        ],
-    },
-    8619: {
-        "name": "PAOK Thessaloniki",
-        "competitions": [
-            {"name": "Super League 1", "league_id": 135},
-            {"name": "Greek Cup", "league_id": 145},
-            {"name": "Europa League", "league_id": 73},
-            {"name": "Europa League Qualification", "league_id": 10613},
-        ],
-    },
-    1569: {
-        "name": "Kocaelispor",
-        "competitions": [
-            {"name": "Süper Lig", "league_id": 71},
-            {"name": "Turkish Cup", "league_id": 151},
-        ],
-    },
-    8521: {
-        "name": "Brest",
-        "competitions": [
-            {"name": "Ligue 1", "league_id": 53},
-            {"name": "Coupe de France", "league_id": 134},
-        ],
-    },
-    162386: {
-        "name": "Panetolikos",
-        "competitions": [
-            {"name": "Super League 1", "league_id": 135},
-            {"name": "Greek Cup", "league_id": 145},
         ],
     },
     7841 : {
@@ -479,24 +374,6 @@ TEAMS = {
             {"name": "Turkish Cup", "league_id": 151},
         ],
 },
-    10200: {    
-        "name": "Panathinaikos",
-        "competitions": [
-            {"name": "Super League 1", "league_id": 135},
-            {"name": "Greek Cup", "league_id": 145},
-            {"name": "Europa League", "league_id": 73},
-            {"name": "Europa League Qualification", "league_id": 10613},
-            {"name": "Champions League", "league_id": 42},
-            {"name": "Champions League Qualification", "league_id": 10611},
-        ],
-},
-    9986: {
-        "name": "Sporting Charleroi",
-        "competitions": [
-            {"name": "First Division A", "league_id": 40},
-            {"name": "Belgian Cup", "league_id": 149},
-        ],
-    },
     1773: {
         "name": "OH Leuven",
         "competitions": [
@@ -506,12 +383,6 @@ TEAMS = {
     },
     951893: {
         "name": "Sabah FK",
-        "competitions": [
-            {"name": "Premier League", "league_id": 262},
-        ],
-    },
-    7981: {
-        "name": "Qarabag FK",
         "competitions": [
             {"name": "Premier League", "league_id": 262},
         ],
@@ -681,28 +552,26 @@ PLAYER_TEAMS = {
     1647807: 9773,  # Pietuszewski -> Porto
     490868: 9773,   # Bednarek -> Porto
     1021834: 9773,  # Kiwior -> Porto
-    760722: 8721,   # Grabara -> Wolfsburg
+    760722: 9885,   # Grabara -> Juventus (wyp. z Wolfsburga)
     908847: 8188,   # Żukowski -> Magdeburg
-    630036: 1925,   # Lis -> Göztepe
     954194: 8259,   #Bogusz - Houston Dynamo FC
     742332: 8595,   #Slisz - Brøndby IF
     1051411: 4081,  # Kacper Kozłowski - Gaziantep FK
     1053714: 8524,  # Nicola Zalewski - Atalanta Bergamo
-    1511063: 8686, # Jan Ziółkowski - AS Roma
+    # 1511063: TODO-API - Jan Ziółkowski -> Monza (klub do dodania)
     557396: 8600,  # Adam Buksa - Udinese
-    1067260: 8722, # Jakub Kamiński - 1. FC Köln
+    # 1067260: TODO-API - Jakub Kamiński -> Benfica (klub do dodania)
     1800401: 9905, # Kacper Potulski - Mainz 05
     361712: 8152,  # Adam Dźwigała - St. Pauli
     1112702: 8152, # Arkadiusz Pyrka - St. Pauli
-    502543: 8177,  # Dawid Kownacki - Hertha BSC
-    1053713: 9904, # Maik Nawrocki - Hannover 96
-    1065940: 8177, # Michał Karbownik - Hertha BSC
+    # 1053713: TODO-API - Maik Nawrocki -> RC Lens (klub do dodania)
+    1065940: 1933, # Michał Karbownik - Başakşehir
     1355526: 9848, # Maxi Oyedele - Strasbourg
     402419: 9851,  # Przemysław Frankowski - Rennes
     765466: 9851,  # Sebastian Szymański - Rennes
     891855: 10235, # Jakub Moder - Feyenoord
     560109: 8674,  # Oskar Zawada - FC Groningen
-    1116778: 10218, # Szymon Włodarczyk - Excelsior
+    1116778: 10014, # Szymon Włodarczyk - Sturm Graz
     277460: 9885,  # Arkadiusz Milik - Juventus
     689987: 8600,  # Jakub Piotrowski - Udinese
     1096327: 8197, # Jakub Stolarczyk - Leicester City
@@ -710,15 +579,12 @@ PLAYER_TEAMS = {
     488960: 8653,  # Michał Helik - Oxford United
     862717: 8653,  # Przemysław Płacheta - Oxford United
     178732: 9857,  # Łukasz Skorupski - Bologna
-    556952: 8659,  # Krystian Bielik - West Bromwich Albion
-    198099: 8540,  # Bartosz Bereszyński - Palermo
+    # 556952: TODO-API - Krystian Bielik -> Cardiff City (klub do dodania)
     920861: 4685,  # Adrian Benedyczak - Kasımpaşa
-    1380468: 6413, # Jan Faberski - PEC Zwolle
-    943056: 9761,  # Daniel Bielica - NAC Breda
-    306174: 8619,  # Tomasz Kędziora - PAOK Thessaloniki
-    361403: 1569,  # Karol Linetty - Kocaelispor
-    724909: 8521,  # Radosław Majecki - Brest
-    815981: 162386, # Konrad Michalak - Panetolikos
+    # 943056: TODO-API - Daniel Bielica -> Portsmouth (klub do dodania)
+    # 306174: TODO-API - Tomasz Kędziora -> Dynamo Kijów (klub do dodania)
+    # 724909: TODO-API - Radosław Majecki -> Pafos FC (klub do dodania)
+    815981: 4681, # Konrad Michalak - Eyüpspor
     943059: 7841,  # Cezary Miszta - Rio Ave
     1484822: 10014, # Filip Rózga - Sturm Graz
     962113: 8232,  # Łukasz Poręba - Elversberg
@@ -726,17 +592,75 @@ PLAYER_TEAMS = {
     1276988: 8188, # Dariusz Stalmach - Magdeburg    
     954190: 9991,  # Michał Skóraś - Gent
     860592: 7943,  # Sebastian Walukiewicz - Sassuolo
-    555646: 1569,  # Mateusz Wieteska - Kocaelispor
     729731: 10252, # Matty Cash - Aston Villa
-    1229761: 4681, # Mateusz Łęgowski - Eyüpspor
-    558136: 10200, # Karol Świderski - Panathinaikos
-    1070709: 9986, # Filip Szymczak - Sporting Charleroi
     1116774: 1773, # Łukasz Łakomy - OH Leuven
     823121: 951893, # Tymoteusz Puchacz - Sabah FK
-    1154332: 7981,  # Mateusz Kochalski - Qarabag FK
     863455: 1699505, # Marcin Bułka - Neom SC
     796751: 92630,  # Patryk Klimala - FC Seoul
 }
+
+# ── TODO sezon 2026/27 — wymaga RapidAPI (01.10.2026) ────────────────────
+# Wykonane offline (bez API):
+#   - usunięci z syncu 2026/27 (dane 2025/26 zostają w bazie):
+#     Kownacki, Kochalski, Świderski, Wieteska, Lis, Bereszyński,
+#     Faberski, Łęgowski, Szymczak, Linetty
+#   - przemapowani na kluby już istniejące w TEAMS:
+#     Grabara->Juventus(9885), Karbownik->Başakşehir(1933),
+#     Michalak->Eyüpspor(4681), Włodarczyk->Sturm Graz(10014)
+#   - usunięte osierocone kluby z TEAMS (żaden Polak nie gra):
+#     Göztepe, Roma, Köln, Hannover, Hertha, West Brom, Excelsior,
+#     Kocaelispor, Panetolikos, Brest, PEC Zwolle, NAC Breda, PAOK,
+#     Qarabag, Panathinaikos, Charleroi
+#     (Wolfsburg 8721 ZOSTAJE — nowy GK Jakub Zieliński, patrz niżej)
+#
+# Po wykupieniu API — kolejność:
+# 1) Znajdź team_id + league_id i dodaj kluby do TEAMS, potem przemapuj
+#    w PLAYER_TEAMS (rapidapi_id gracza w nawiasie):
+#     Lewandowski (93447)      -> Chicago Fire
+#     Buksa (557396)           -> Mallorca
+#     Ziółkowski (1511063)     -> Monza
+#     Kamiński (1067260)       -> Benfica Lizbona
+#     Nawrocki (1053713)       -> RC Lens  (ten sam klub co Skóraś)
+#     Skóraś (954190)          -> RC Lens
+#     Płacheta (862717)        -> Austin FC
+#     Bielik (556952)          -> Cardiff City
+#     Bielica (943056)         -> Portsmouth
+#     Kędziora (306174)        -> Dynamo Kijów
+#     Majecki (724909)         -> Pafos FC (wypoż. z AS Monaco — sprawdź
+#                                 w API, czy zwraca Pafos czy Monaco)
+#     Stalmach (1276988)       -> Werder Bremen (ten sam klub co Wójcik)
+# 2) Znajdź rapidapi_id (search po nazwisku) i dodaj do POLISH_PLAYERS +
+#    PLAYER_TEAMS (pozycja do potwierdzenia w API):
+#     Karol Angielski  -> Nea Salamina Famagusta (CYP)
+#     Łukasz Bejger    -> NK Celje (SVN)
+#     Igor Drapiński   -> Samsunspor (TUR)
+#     Bright Ede       -> Deportivo La Coruña (ESP)
+#     Wojciech Golla   -> Puskás Akadémia (HUN)
+#     Bartosz Mazurek  -> RB Salzburg (AUT)
+#     Miłosz Matysik   -> Aris Limassol (CYP)
+#     Mateusz Musiałowski -> Omonia Nikozja (CYP)
+#     Adrian Przyborek -> Lazio Rzym (ITA)
+#     Dominik Steczyk  -> Académico de Viseu (POR)
+#     Dominik Marczuk  -> Real Salt Lake (USA, MLS)
+#     Oskar Kubiak     -> Slavia Praga (CZE)
+#     Daniel Baran     -> FC Dallas (USA)
+#     Fabian Bzdyl     -> MŠK Žilina (SVK)
+#     Dawid Bugaj      -> CF Montréal (MLS)
+#     Jakub Jezierski  -> Sigma Ołomuniec (CZE)
+#     Krzysztof Kurowski -> FC Twente (NED)
+#     Kornel Lisman    -> Venezia FC (ITA)
+#     Jan Leszczyński  -> Borussia Mönchengladbach (GER)
+#     Daniel Mikołajewski -> FC Luzern (SUI)
+#     Bartosz Mrozek   -> Udinese (ITA; klub już w TEAMS 8600)
+#     Wiktor Nowak     -> Slavia Praga (CZE)
+#     David Poreba     -> Chicago Fire (USA; poprawny zapis "Poreba",
+#                        przy search sprawdź też wariant "Poręba")
+#     Oskar Wójcik     -> Werder Bremen (GER)
+#     Oliwier Zych     -> Vitória SC Guimarães (POR)
+#     Fabian Mrozek    -> FC Cincinnati (USA)
+#     Kacper Tobiasz   -> Gaziantep FK (TUR; GK; klub już w TEAMS 4081)
+#     Jakub Zieliński  -> VfL Wolfsburg (GER; GK; klub już w TEAMS 8721)
+# ──────────────────────────────────────────────────────────────────────
 
 
 # Sync state helpers
