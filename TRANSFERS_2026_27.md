@@ -96,8 +96,9 @@ Zasada: „usunięci" = usunięci tylko z syncu 2026/27; dane historyczne 2025/2
 | 78 | Fabian Mrozek | FC Cincinnati (USA) | |
 | 79 | Kacper Tobiasz (GK) | Gaziantep FK (Turcja) | klub już w TEAMS |
 | 80 | Jakub Zieliński (GK) | VfL Wolfsburg (Niemcy) | klub już w TEAMS |
+| 81 | Dawid Kurminowski | Kalamata (Grecja) | |
 
-**Razem: 80 piłkarzy.**
+**Razem: 81 piłkarzy.**
 
 ## Usunięci z syncu 2026/27 (10) — historia 2025/26 zostaje w bazie
 
