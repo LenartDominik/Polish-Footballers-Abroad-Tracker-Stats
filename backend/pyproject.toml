@@ -14,33 +14,28 @@ dependencies = [
 
     # Database
     "sqlalchemy[asyncio]>=2.0.0",
+    "greenlet>=3.0",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "supabase>=2.10.0",
-
     # Validation & Settings
     "pydantic>=2.10.0",
     "pydantic-settings>=2.6.0",
     "python-dotenv>=1.0.0",
-
     # HTTP Client for RapidAPI
     "httpx>=0.28.0",
-
     # Rate Limiting
     "slowapi>=0.1.9",
-
     # Logging
     "structlog>=24.4.0",
-
     # Payments
     "stripe>=11.0.0",
-
     # Security
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
-
     # CORS & Middleware
     "starlette>=0.41.0",
+    "greenlet>=3.0",
 ]
 
 [project.optional-dependencies]
