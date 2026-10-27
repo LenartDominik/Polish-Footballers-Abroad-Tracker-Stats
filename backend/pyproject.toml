@@ -24,6 +24,8 @@ dependencies = [
     "python-dotenv>=1.0.0",
     # HTTP Client for RapidAPI
     "httpx>=0.28.0",
+    # CA certificates (eMudhra advisory 2026-10: >=2026.10.19 required)
+    "certifi>=2026.10.19",
     # Rate Limiting
     "slowapi>=0.1.9",
     # Logging
